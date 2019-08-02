@@ -1,0 +1,56 @@
+# Site validation
+
+## Auto site validation & use and assessment unit assignments
+Performs an automated validation of site locations (e.g. appropriate sample location types, waterbody types, jurisdictions etc.). 
+Also performs a spatial join between sites and beneficial use, assessment unit,  watershed managment unit, and UT jurisdiction polygon attributes to sites.
+```{r, site-auto-validate}
+autoValidateWQPsites(
+	sites_object=irdata$sites,
+	master_site_file="02_site_validation/initial_master_site_file.xlsx",
+	waterbody_type_file = "02_site_validation/waterbody_type_domain_table.csv",
+	)
+```
+
+## Append external sites
+JVL performed an initial site review to cleanup duplicated MLIDs and lat/longs.
+Externally submitted sites that were found in the WQP were queried from WQP (some of these had duplicated MLIDs with the same name which were removed).
+
+External sites that were not in the WQP were appended to the sites object, and the auto-validation was re-run including these sites and the externally submitted, requeried sites, using the JVL reviewed file as the master site file, to generate sites for review by other DWQ staff.
+MonitoringLocationIdentifiers were assigned to two sites that were missing them (lower_web, nfork_ogden). 
+Because all sites were reported in decimal degrees, horizontal datum was manually updated to WGS84 when left blank. 
+Sites with blank site types were manually updated to River/Stream.
+
+
+```{r}
+ext_sites_in_wqp1=read.csv(file='02_site_validation/external_sites/in_portal_external assessments mlids file 1.csv')
+ext_sites_in_wqp2=read.csv(file='02_site_validation/external_sites/in_portal_external assessments mlids file 2.csv')
+ext_sites=read.csv(file='02_site_validation/external_sites/not_in_portal_external assessments mlids file 1.csv')
+ext_sites_all=plyr::rbind.fill(ext_sites_in_wqp1, ext_sites_in_wqp2, ext_sites)
+
+dim(ext_sites_in_wqp1)
+dim(ext_sites_all)
+
+autoValidateWQPsites(
+	sites_object=ext_sites_all,
+	master_site_file="02_site_validation/site-reviews-Jake-2019-08-02.xlsx",
+	waterbody_type_file = "02_site_validation/waterbody_type_domain_table.csv",
+	)
+```
+
+
+
+## Manual site validation
+
+Sites were split out by WMU for manual site validation. The irTools::siteValApp() was used for reviewing sites. Following review by DWQ staff, all sites were appended back to a single file.
+
+
+```{r, eval=F}
+
+sites=as.data.frame(readxl::read_excel('02_site_validation/site-reviews-Jake-2019-08-02 2 ready for other reviews.xlsx', 'sites'))
+reasons=as.data.frame(readxl::read_excel('02_site_validation/site-reviews-Jake-2019-08-02 2 ready for other reviews.xlsx', 'reasons'))
+
+plyr::d_ply(sites, 'Mgmt_Unit', function(sdf) writexl::write_xlsx(list(sites=sdf, reasons=reasons), path=paste0('02_site_validation/manual_reviews/', sdf$Mgmt_Unit[1], ' sites.xlsx'), format_headers=F, col_names=T))
+
+irTools::runSiteValApp()
+```
+

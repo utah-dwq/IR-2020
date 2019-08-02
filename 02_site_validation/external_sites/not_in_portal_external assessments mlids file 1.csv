@@ -1,0 +1,16 @@
+MonitoringLocationIdentifier,MonitoringLocationName,MonitoringLocationTypeName,LatitudeMeasure,LongitudeMeasure,HorizontalCollectionMethodName,SourceMapScaleNumeric,HorizontalCoordinateReferenceSystemDatumName
+lower_web,lower Weber River near Uintah (Weber County),River/Stream,41.13488,-111.91225,,,WGS84
+nfork_ogden,North Fork of the Ogden River (Weber County),River/Stream,41.31486,-111.84371,,,WGS84
+GSL-egg-Se-ANTI,GSL egg Se Antelope Island Causeway,Wetland,41.091527,-112.145196,GPS-Unspecified,,WGS84
+GSL-egg-Se-OGBA,GSL egg Se Ogden Bay,Wetland,41.200633,-112.243283,GPS-Unspecified,,WGS84
+GSL-egg-Se-FARM,GSL egg Se Farmington Bay,Wetland,40.97795,-111.9887,GPS-Unspecified,,WGS84
+GSL-egg-Se-SALT,GSL egg Se Saltair,Wetland,40.7686,-112.174433,GPS-Unspecified,,WGS84
+168748,Soldier Creek above confluence with Dairy Fork,River/Stream,39.9706,-111.3331,,,WGS84
+168749,Wide Hollow Creek (UT15-1160),River/Stream,40.48334,-111.64792,,,WGS84
+168750,Spanish Fork near Moark Junction,River/Stream,40.0824,-111.5957,,,WGS84
+168751,Thistle Creek,River/Stream,39.91912,-111.54801,,,WGS84
+168752,Daniels Creek (UT15-1156),River/Stream,40.42684,-111.34866,,,WGS84
+168753,Main Creek (UT15-1158),River/Stream,40.31891,-111.35992,,,WGS84
+168754,Butterfield Creek,River/Stream,40.5096,-112.10342,,,WGS84
+168755,Tie Fork,River/Stream,39.9774,-111.21358,,,WGS84
+5952545,Lake Powell Navajo canyon,Reservoir,36.98962,-111.4025,GPS-Unspecified,,NAD83

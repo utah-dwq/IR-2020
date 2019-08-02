@@ -1,0 +1,20 @@
+MonitoringLocationTypeName,IR_FLAG,InData
+Canal Drainage,ACCEPT,NA
+Canal Irrigation,ACCEPT,Y
+Canal Transport,ACCEPT,Y
+Facility Other,REJECT,Y
+Lake,ACCEPT,Y
+"Lake, Reservoir, Impoundment",ACCEPT,NA
+Other-Surface Water,ACCEPT,NA
+Pond-Stormwater,REJECT,NA
+Reservoir,ACCEPT,Y
+River/Stream,ACCEPT,Y
+River/Stream Intermittent,ACCEPT,NA
+River/Stream Perennial,ACCEPT,NA
+Seep,ACCEPT,NA
+Spring,ACCEPT,NA
+Stream,ACCEPT,Y
+Stream: Canal,ACCEPT,NA
+Stream: Ditch,REJECT,NA
+Wetland,REJECT,Y
+Wetland Undifferentiated,REJECT,Y

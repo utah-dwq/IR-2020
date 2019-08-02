@@ -1,0 +1,30 @@
+# Data download from EPA Water Quality Portal
+The majority of assessment data used in the IR are available via the EPA [Water Quality Portal](https://www.waterqualitydata.us/]). Additional data from 
+internal and external data submissions are also included in the assessment. These data were either manually appended to WQP data prior to assessment or 
+assessed separately. The period of record for the 2020 IR includes water years 2011-2018. From the IR Assessment Methods:
+
+> DWQ uses water years to define the period of record. DWQ uses the same definition as the [U.S. Geologic Survey](https://water.usgs.gov/nwc/explain_data.html) and defines the water year as the 12-month period between October 1 and September 30 of the following year. For the 2018/2020 IR, the period of record is October 1, 2010 to September 30, 2018 (water years 2011-2018).
+
+
+## Download sites
+downloadWQP(outfile_path='01_raw_data', zip=FALSE, retrieve="sites", start_date='10/01/2011', end_date='09/30/2018')
+
+## Download narrowresult, activity, and detection/quantitation
+downloadWQP(outfile_path='01_raw_data',start_date='10/01/2011', end_date='09/30/2018', zip=TRUE, unzip=TRUE, retrieve=c("narrowresult", "activity", "detquantlim"))
+
+## Import data to workspace
+irdata <- readWQPFiles(file_select=FALSE,
+            narrowresult_file = "01_raw_data\\narrowresult-2019-08-01.csv",
+            sites_file = "01_raw_data\\sites-2019-08-01.csv",
+            activity_file = "01_raw_data\\activity-2019-08-01.csv",
+            detquantlim_file = "01_raw_data\\detquantlim-2019-08-01.csv",
+            orph_check = TRUE)
+
+objects(irdata)
+
+## Append external sites (not already in WQP) to sites objects
+ext_sites=read.csv(file='')
+irdata$sites=rbind.fill(irdata$sites
+
+
+

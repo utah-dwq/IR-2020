@@ -1,0 +1,3 @@
+MonitoringLocationIdentifier,MonitoringLocationName,MonitoringLocationTypeName,LatitudeMeasure,LongitudeMeasure,HorizontalCollectionMethodName,SourceMapScaleNumeric,HorizontalCoordinateReferenceSystemDatumName
+4992089,Red Butte Creek Above Sunnyside,River/Stream,,,,,WGS84
+4938530,Flaming Gorge Reservoir,Reservoir,,,GPS-Unspecified,,NAD83
