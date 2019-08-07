@@ -22,9 +22,29 @@ irdata <- readWQPFiles(file_select=FALSE,
 
 objects(irdata)
 
-## Append external sites (not already in WQP) to sites objects
-ext_sites=read.csv(file='')
-irdata$sites=rbind.fill(irdata$sites
+
+## Identify characters in result value column
+```{r}
+nr = read.csv("01_raw_data\\narrowresult-2019-08-01.csv", na.strings=c("NA", ""))
+dim(nr)
+nr = subset(nr, !is.na(ResultMeasureValue))
+dim(nr)
+
+nr$RMV_num=wqTools::facToNum(nr$ResultMeasureValue)
+table(is.na(nr$RMV_num))
+
+nr_na=subset(nr, is.na(RMV_num))
+
+table(droplevels(nr_na$CharacteristicName))
+table(droplevels(nr_na$ResultMeasureValue))
+
+table(droplevels(nr_na$CharacteristicName), droplevels(nr_na$ResultMeasureValue))
+table(droplevels(nr_na$OrganizationIdentifier), droplevels(nr_na$ResultMeasureValue))
+table(droplevels(nr_na$OrganizationIdentifier))
+```
+
+*** There are just over 5000 records that cannot be interpreted to numeric values. May want to replace commas, <, >, J, etc.
+
 
 
 

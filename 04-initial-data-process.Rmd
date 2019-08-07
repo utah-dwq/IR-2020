@@ -1,0 +1,92 @@
+# Initial data processing
+
+## Data validation
+Table-based validation.  
+Functions to update & apply data validation tables, generate data with consistent nomenclature.  
+1. Labs & activity types  
+2. Activity media  
+3. Parameter names & fractions  
+4. Detection conditions  
+5. Detection limit types  
+6. Unit conversion factors  
+7. Apply screening tables and subset to accepted data  
+<br><br>
+
+```{r, id-transwb, echo=FALSE}
+translation_wb="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/translations/ir_translation_workbook.xlsx"
+```
+
+
+### Read initial site review and reject data from auto-rejected sites before updating
+```{r}
+sites_auto_val=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/02_site_validation/site-reviews-Jake-2019-08-02 2 ready for other reviews.xlsx', 'sites'))
+mlids=sites_auto_val$MonitoringLocationIdentifier[sites_auto_val$IR_FLAG!='REJECT']
+update_table_data=irdata$merged_results[irdata$merged_results$MonitoringLocationIdentifier %in% mlids,]
+
+```
+
+### Update detection condition / limit name tables
+```{r, update-detcondlim}
+updateDetCondLimTables(results=update_table_data, detquantlim=irdata$detquantlim, translation_wb=translation_wb,
+						detConditionTable_startRow=3, detLimitTypeTable_startRow=3)
+```
+
+### Update lab/activity & media tables
+```{r, labactmedia}
+updateLabActMediaTables(update_table_data, translation_wb=translation_wb, labNameActivityTable_startRow = 2)
+```
+
+### Update parameter translation tables
+```{r, update-param-trans, eval=F}
+updateParamTrans(data=update_table_data, detquantlim=irdata$detquantlim,  translation_wb=translation_wb, WQPParamCASID_startRow = 4)
+```
+
+
+
+
+
+
+
+
+
+
+## Data prep
+Generating assessable dataset  
+
+1. Assigning criteria (by parameter & use via criteria table)  
+2. Convert to consistent units (target units defined by criteria)  
+3. Check that data fractions & activities match assessment targets  
+4. Aggregate to daily values  
+5. Generate correction factors & calculate criteria  
+6. Split data into assessment groups  
+<br><br>
+
+### Determine detection conditions and fill NDs
+```{r, fill-masked}
+merged_results_filled=fillMaskedValues(results=update_table_data, detquantlim=irdata$detquantlim, translation_wb=translation_wb,
+									   detLimitTypeTable_sheetname="detLimitTypeTable", detLimitTypeTable_startRow=3,
+									   unitConvTable_sheetname="unitConvTable", unitConvTable_startRow=1, unitConvTable_startCol=1,
+									   lql_fac=0.5, uql_fac=1)
+```
+
+
+### Apply parameter translation table
+```{r, apply-param-trans}
+mrf_sub_translated=applyScreenTable(mrf_sub,wb=translation_wb,
+									sheetname="paramTransTable",startRow=4,flag_col_name="IR_Parameter_FLAG",com_col_name="IR_Parameter_COMMENT",
+									na_dup_err=F)
+```
+### Subset data to ACCEPT parameters
+```{r, sub-accept-params}
+accept_data=subset(mrf_sub_translated, IR_Parameter_FLAG=="ACCEPT")
+```
+
+```{r, echo=F}
+tab=data.frame(table(droplevels(accept_data$CharacteristicName)))
+names(tab)=c('Parameter', 'Count')
+```
+```{r, echo=F}
+knitr::kable(tab, caption='Accepted parameter sample counts.')
+```
+
+
