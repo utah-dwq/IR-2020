@@ -1,0 +1,98 @@
+# Lake assessments
+Manually side-stepping much of the IR data process for lake profile and trophic assessments.
+
+library(wqTools)
+library(irTools)
+
+## Read data from WQP
+#*Note. Querying long term data for visualization and review purposes, but only assessing data within IR POR. For this analysis, limiting data to UTAHDWQ_WQX organization because these samples include the profile measurements required for lake assessments.*
+
+params=c('Dissolved oxygen (DO)','Temperature, water','pH','Depth, Secchi disk depth','Phosphate-phosphorus','Chlorophyll a', 'Depth, data-logger (ported)', 'Chlorophyll a, uncorrected for pheophytin', 'Chlorophyll a, corrected for pheophytin')
+lake_data=readWQP(type='narrowresult', siteType='Lake, Reservoir, Impoundment', organization='UTAHDWQ_WQX', characteristicName=params)
+bk=lake_data
+lake_data=within(lake_data, {
+	DataLoggerLine[DataLoggerLine %in% c("`", "N/A")]="NA"
+})
+
+lake_sites=readWQP(type='sites', siteType='Lake, Reservoir, Impoundment', organization='UTAHDWQ_WQX')
+lake_sites=subset(lake_sites, MonitoringLocationIdentifier %in% lake_data$MonitoringLocationIdentifier)
+lake_sites=assignAUs(lake_sites)
+all(lake_data$MonitoringLocationIdentifier %in% lake_sites$MonitoringLocationIdentifier)
+
+### Check parameter units
+knitr::kable(table(lake_data$CharacteristicName, lake_data$ResultMeasure.MeasureUnitCode))
+trophic_data=subset(lake_data, ResultMeasure.MeasureUnitCode!='mg')
+
+### Merge spatial info to data
+lake_data=merge(lake_data, lake_sites, all.x=T)
+
+## Split profile & trophic data
+profile_data=subset(lake_data, !is.na(DataLoggerLine) & CharacteristicName!='Depth, Secchi disk depth')
+
+names=c("ActivityIdentifier","ActivityStartDate","IR_MLID","IR_MLNAME","R317Descrp","IR_Lat","IR_Long","ASSESS_ID","AU_NAME","AU_Type","BeneficialUse","BEN_CLASS","R3172ParameterName","IR_Value","IR_Unit","NumericCriterion")
+
+data.frame(names, names %in% names(profile_data))
+
+profile_data=within(profile_data, {
+	R3172ParameterName=CharacteristicName
+	R3172ParameterName[R3172ParameterName=='Depth, data-logger (ported)']='Profile depth'
+	IR_Value=as.numeric(ResultMeasureValue)
+	IR_MLID=MonitoringLocationIdentifier
+	IR_MLNAME=MonitoringLocationName
+	IR_Lat=LatitudeMeasure
+	IR_Long=LongitudeMeasure
+	IR_Unit=ResultMeasure.MeasureUnitCode
+})	
+data.frame(names, names %in% names(profile_data))
+
+trophic_data=subset(lake_data, CharacteristicName %in% c('Depth, Secchi disk depth','Phosphate-phosphorus','Chlorophyll a', 'Chlorophyll a, uncorrected for pheophytin', 'Chlorophyll a, corrected for pheophytin'))
+
+lake_sites=within(lake_sites, {
+	MonitoringLocationTypeName_wqp=MonitoringLocationTypeName
+	MonitoringLocationTypeName=ifelse(MonitoringLocationIdentifier %in% profile_data$MonitoringLocationIdentifier, 'Profile', 'Other')
+})
+
+## Site map
+#buildMap(sites=lake_sites)
+
+## Lake profiles
+### Assign uses to profile data, subset to ALUs
+sites_uses=(assignUses(lake_sites, flatten=T))[,c('MonitoringLocationIdentifier','BeneficialUse','R317Descrp','Water_Type','bu_class')]
+names(sites_uses)[names(sites_uses)=='bu_class']='BEN_CLASS'
+profile_data=merge(profile_data, sites_uses, all.x=T)
+profile_data_asmnt=subset(profile_data, BeneficialUse %in% c("3A","3B"))
+profile_data_asmnt=subset(profile_data_asmnt, as.Date(ActivityStartDate)>as.Date('2011-10-01') & as.Date(ActivityStartDate)<as.Date('2018-09-30'))
+
+### Manually assigning uses to out-of-state sites (for non-assessment dataset)
+man_uses_3A=c('UTAHDWQ_WQX-4906960','UTAHDWQ_WQX-4906980','UTAHDWQ_WQX-5939770','UTAHDWQ_WQX-4938610','UTAHDWQ_WQX-4938620','UTAHDWQ_WQX-4938640','UTAHDWQ_WQX-4938650','UTAHDWQ_WQX-4938680','UTAHDWQ_WQX-4938660','UTAHDWQ_WQX-4938685')
+man_uses_3B=c('UTAHDWQ_WQX-5952435')
+profile_data_all=within(profile_data, {
+	BeneficialUse[MonitoringLocationIdentifier %in% man_uses_3A] = '3A'
+	BeneficialUse[MonitoringLocationIdentifier %in% man_uses_3B] = '3B'
+})
+profile_data_all=subset(profile_data_all, BeneficialUse %in% c("3A","3B"))
+
+
+### Assign criteria
+prof_crit=read.csv(file='P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/lake_prof_criteria.csv')
+profile_data_asmnt=merge(profile_data_asmnt, prof_crit, all.x=T)
+profile_data_all=merge(profile_data_all, prof_crit, all.x=T)
+
+### Run assessments
+#* Note - not accounting for Kens Lake site-specific temperature criterion here *
+data.frame(names, names %in% names(profile_data_asmnt))
+table(profile_data_asmnt$R3172ParameterName)
+prof_asmnts=assessLakeProfiles(profile_data_asmnt)
+names(prof_asmnts$profile_asmnts_mlid_param)[names(prof_asmnts$profile_asmnts_mlid_param) == 'IR_Cat'] = 'AssessCat'
+
+table(profile_data_all$R3172ParameterName)
+prof_asmnts_all=assessLakeProfiles(profile_data_all)
+
+
+
+
+
+
+
+## Trophic data
+
