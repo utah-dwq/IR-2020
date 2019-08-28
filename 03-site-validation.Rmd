@@ -3,7 +3,7 @@
 ## Auto site validation & use and assessment unit assignments
 Performs an automated validation of site locations (e.g. appropriate sample location types, waterbody types, jurisdictions etc.). 
 Also performs a spatial join between sites and beneficial use, assessment unit,  watershed managment unit, and UT jurisdiction polygon attributes to sites.
-```{r, site-auto-validate}
+```{r, site-auto-validate, eval=F}
 autoValidateWQPsites(
 	sites_object=irdata$sites,
 	master_site_file="02_site_validation/initial_master_site_file.xlsx",
@@ -21,7 +21,7 @@ Because all sites were reported in decimal degrees, horizontal datum was manuall
 Sites with blank site types were manually updated to River/Stream.
 
 
-```{r}
+```{r, eval=F}
 ext_sites_in_wqp1=read.csv(file='02_site_validation/external_sites/in_portal_external assessments mlids file 1.csv')
 ext_sites_in_wqp2=read.csv(file='02_site_validation/external_sites/in_portal_external assessments mlids file 2.csv')
 ext_sites=read.csv(file='02_site_validation/external_sites/not_in_portal_external assessments mlids file 1.csv')
@@ -30,19 +30,10 @@ ext_sites_all=plyr::rbind.fill(ext_sites_in_wqp1, ext_sites_in_wqp2, ext_sites)
 dim(ext_sites_in_wqp1)
 dim(ext_sites_all)
 
-autoValidateWQPsites(
-	sites_object=ext_sites_all,
-	master_site_file="02_site_validation/site-reviews-Jake-2019-08-02.xlsx",
-	waterbody_type_file = "02_site_validation/waterbody_type_domain_table.csv",
-	)
 ```
-
-
-
 ## Manual site validation
 
 Sites were split out by WMU for manual site validation. The irTools::siteValApp() was used for reviewing sites. Following review by DWQ staff, all sites were appended back to a single file.
-
 
 ```{r, eval=F}
 
@@ -53,4 +44,31 @@ plyr::d_ply(sites, 'Mgmt_Unit', function(sdf) writexl::write_xlsx(list(sites=sdf
 
 irTools::runSiteValApp()
 ```
+
+
+### Incorporating manual reviews & accounting for AU edits
+
+sites=read.csv("01_raw_data\\sites-2019-08-22.csv")
+autoValidateWQPsites(
+	sites_object=sites,
+	master_site_file="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/02_site_validation/master_site_file_08272019_norevsites.xlsx",,
+	waterbody_type_file = "02_site_validation/waterbody_type_domain_table.csv"
+)
+
+### Final round of manual reviews
+
+## Read in final sites file
+
+
+
+
+
+
+
+
+
+
+
+
+
 

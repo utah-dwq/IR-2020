@@ -18,7 +18,7 @@ translation_wb="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/translations
 
 
 ### Read initial site review and reject data from auto-rejected sites before updating
-```{r}
+```{r, eval=F}
 sites_auto_val=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/02_site_validation/site-reviews-Jake-2019-08-02 2 ready for other reviews.xlsx', 'sites'))
 mlids=sites_auto_val$MonitoringLocationIdentifier[sites_auto_val$IR_FLAG!='REJECT']
 update_table_data=irdata$merged_results[irdata$merged_results$MonitoringLocationIdentifier %in% mlids,]
@@ -26,13 +26,13 @@ update_table_data=irdata$merged_results[irdata$merged_results$MonitoringLocation
 ```
 
 ### Update detection condition / limit name tables
-```{r, update-detcondlim}
+```{r, update-detcondlim, eval=F}
 updateDetCondLimTables(results=update_table_data, detquantlim=irdata$detquantlim, translation_wb=translation_wb,
 						detConditionTable_startRow=3, detLimitTypeTable_startRow=3)
 ```
 
 ### Update lab/activity & media tables
-```{r, labactmedia}
+```{r, labactmedia, eval=F}
 updateLabActMediaTables(update_table_data, translation_wb=translation_wb, labNameActivityTable_startRow = 2)
 ```
 
@@ -42,6 +42,42 @@ updateParamTrans(data=update_table_data, detquantlim=irdata$detquantlim,  transl
 ```
 
 
+
+## Apply screening tables
+1. Sites
+2. Activity media
+3. Lab/activity
+4. Parameter translation table
+
+library(magrittr)
+translation_wb='ir_translation_workbook_working.xlsx'
+merged_results=irdata$merged_results %>%
+	applyScreenTable(wb=translation_wb, sheetname="masterSiteTable", startRow=1, flag_col_name="IR_Site_FLAG", com_col_name="IR_Site_COMMENT") %>% 
+	subset(IR_Site_FLAG=='ACCEPT') %>% 
+	applyScreenTable(wb=translation_wb, sheetname="activityMediaNameTable", startRow=1, flag_col_name="IR_ActMedia_FLAG", com_col_name="IR_ActMedia_COMMENT") %>% 
+	applyScreenTable(wb=translation_wb, sheetname="labNameActivityTable", startRow=3, flag_col_name="IR_LabAct_FLAG", com_col_name="IR_LabAct_COMMENT") %>% 
+	applyScreenTable(wb=translation_wb, sheetname="detConditionTable", startRow=3, flag_col_name="IR_DetCond_FLAG", com_col_name="IR_DetCond_COMMENT")
+
+rej_data=subset(merged_results, IR_Site_FLAG=='REJECT' | IR_ActMedia_FLAG=='REJECT' | IR_LabAct_FLAG=='REJECT' | IR_DetCond_FLAG=='REJECT')
+acc_data=subset(merged_results, IR_Site_FLAG=='ACCEPT' & IR_ActMedia_FLAG=='ACCEPT' & IR_LabAct_FLAG=='ACCEPT' & IR_DetCond_FLAG=='ACCEPT')
+
+acc_data=applyScreenTable(acc_data, wb=translation_wb, sheetname="paramTransTable", startRow=4, flag_col_name="IR_Parameter_FLAG", com_col_name="IR_Parameter_COMMENT")
+
+
+
+	
+	
+with(merged_results,{table(ActivityMediaName, IR_ActMedia_FLAG)})
+
+
+
+
+
+
+
+
+
+sites=as.data.frame(readxl::read_excel(translation_wb, 'masterSiteTable'))
 
 
 
