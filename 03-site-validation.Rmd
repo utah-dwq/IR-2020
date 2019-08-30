@@ -47,17 +47,20 @@ irTools::runSiteValApp()
 
 
 ### Incorporating manual reviews & accounting for AU edits
-
+```{r, eval=F}
 sites=read.csv("01_raw_data\\sites-2019-08-22.csv")
 autoValidateWQPsites(
 	sites_object=sites,
-	master_site_file="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/02_site_validation/master_site_file_08272019_norevsites.xlsx",,
+	master_site_file="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/02_site_validation/master_site_file_08272019_norevsites.xlsx",
 	waterbody_type_file = "02_site_validation/waterbody_type_domain_table.csv"
 )
+```
 
 ### Final round of manual reviews
 
-## Read in final sites file
+### Final sites file:
+P:\WQ\Integrated Report\IR_2020\2020-IR-assessments\assessment\02_site_validation\master_site_file_08292019_2020IR_final.xlsx
+In translation workbook, also.
 
 
 

@@ -7,15 +7,17 @@ assessed separately. The period of record for the 2020 IR includes water years 2
 
 
 ## Download sites
+```{r, eval=FALSE}
 downloadWQP(outfile_path='01_raw_data', zip=FALSE, retrieve="sites")
-
+```
 ## Download narrowresult, activity, and detection/quantitation
+```{r, eval=FALSE}
 downloadWQP(outfile_path='01_raw_data',start_date='10/01/2010', end_date='09/30/2018', zip=TRUE, unzip=TRUE, retrieve=c("narrowresult", "activity", "detquantlim"))
-
+```
 
 ## Identify characters in result value column
-```{r}
-nr = read.csv("01_raw_data\\narrowresult-2019-08-22-spec-chars-filled.csv", na.strings=c("NA", ""))
+```{r, eval=FALSE}
+nr = read.csv("01_raw_data\\narrowresult-2019-08-22.csv", na.strings=c("NA", ""))
 dim(nr)
 nr_sub = subset(nr, !is.na(ResultMeasureValue))
 dim(nr_sub)
@@ -26,16 +28,13 @@ table(is.na(nr_sub$RMV_num))
 nr_na=subset(nr_sub, is.na(RMV_num))
 
 table(droplevels(nr_na$CharacteristicName))
-table(droplevels(nr_na$ResultMeasureValue))
-
-table(droplevels(nr_na$CharacteristicName), droplevels(nr_na$ResultMeasureValue))
-table(droplevels(nr_na$OrganizationIdentifier), droplevels(nr_na$ResultMeasureValue))
 table(droplevels(nr_na$OrganizationIdentifier))
 ```
+
 *** There are just over 5000 records that cannot be interpreted to numeric values. May want to replace commas, <, >, J, etc.
 
 ## Replacing special characters
-
+```{r, eval=FALSE}
 nr=within(nr, {
 	gsub(",", "", ResultMeasureValue)
 	gsub("< ", "", ResultMeasureValue)
@@ -45,32 +44,33 @@ nr=within(nr, {
 })
 nr_sub = subset(nr, !is.na(ResultMeasureValue))
 dim(nr_sub)
-
 nr_sub$RMV_num=wqTools::facToNum(nr_sub$ResultMeasureValue)
 table(is.na(nr_sub$RMV_num))
-
 nr_na=subset(nr_sub, is.na(RMV_num))
-
 table(droplevels(nr_na$CharacteristicName))
+```
 
 ## Write NR back to file
-```{r}
-write.csv(nr, file='01_raw_data/narrowresult-2019-08-22.csv', row.names=F)
+```{r, eval=FALSE}
+write.csv(nr, file='01_raw_data/narrowresult-2019-08-22-spec-chars-filled.csv', row.names=F)
 ```
 
 
-# Import data to workspace
+## Import data to workspace
+```{r}
 irdata <- readWQPFiles(file_select=FALSE,
-            narrowresult_file = "01_raw_data\\narrowresult-2019-08-22-spec-chars-filled.csv",
+            narrowresult_file = "01_raw_data\\narrowresult-2019-08-22.csv",
             sites_file = "01_raw_data\\sites-2019-08-22.csv",
             activity_file = "01_raw_data\\activity-2019-08-22.csv",
             detquantlim_file = "01_raw_data\\detquantlim-2019-08-22.csv",
             orph_check = TRUE)
-
 objects(irdata)
+```
 
+## Subset to sites w/ data
+```{r, eval=FALSE}
 irdata$sites=subset(irdata$sites, MonitoringLocationIdentifier %in% irdata$merged_results$MonitoringLocationIdentifier)
 write.csv(irdata$sites, "01_raw_data\\sites-2019-08-22.csv", row.names=F)
-
+```
 
 
