@@ -59,7 +59,7 @@ write.csv(nr, file='01_raw_data/narrowresult-2019-08-22-spec-chars-filled.csv', 
 ## Import data to workspace
 ```{r}
 irdata <- readWQPFiles(file_select=FALSE,
-            narrowresult_file = "01_raw_data\\narrowresult-2019-08-22.csv",
+            narrowresult_file = "01_raw_data\\narrowresult-2019-08-22-spec-chars-filled.csv",
             sites_file = "01_raw_data\\sites-2019-08-22.csv",
             activity_file = "01_raw_data\\activity-2019-08-22.csv",
             detquantlim_file = "01_raw_data\\detquantlim-2019-08-22.csv",
