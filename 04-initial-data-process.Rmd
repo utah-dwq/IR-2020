@@ -10,10 +10,6 @@ Functions to update & apply data validation tables, generate data with consisten
 6. Unit conversion factors  
 7. Apply screening tables and subset to accepted data  
 
-```{r, id-transwb}
-translation_wb="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/translations/ir_translation_workbook.xlsx"
-```
-
 ### Update screening/translation tables
 #### Read initial site review and reject data from auto-rejected sites before updating
 ```{r, eval=F}
@@ -40,19 +36,18 @@ updateParamTrans(data=update_table_data, detquantlim=irdata$detquantlim,  transl
 
 
 
-### Apply screening tables
+### Apply pre-lim screening tables
 1. Sites
 2. Activity media
 3. Lab/activity
-4. Parameter translation table
 
-```{r, apply-screens, eval=F}
-translation_wb='ir_translation_workbook_working.xlsx'
+```{r, apply-screens}
+translation_wb='ir_translation_workbook_working_v9_ef - no IR_Fraction formula.xlsx'
 merged_results=irdata$merged_results %>%
 	applyScreenTable(wb=translation_wb, sheetname="masterSiteTable", startRow=1, flag_col_name="IR_Site_FLAG", com_col_name="IR_Site_COMMENT")
 	rej_data=subset(merged_results, IR_Site_FLAG=='REJECT')
 	acc_data=subset(merged_results, IR_Site_FLAG=='ACCEPT')
-acc_data=subset(acc_data, IR_Site_FLAG=='ACCEPT') %>% 
+acc_data=acc_data%>% 
 	applyScreenTable(wb=translation_wb, sheetname="activityMediaNameTable", startRow=1, flag_col_name="IR_ActMedia_FLAG", com_col_name="IR_ActMedia_COMMENT") %>% 
 	applyScreenTable(wb=translation_wb, sheetname="labNameActivityTable", startRow=3, flag_col_name="IR_LabAct_FLAG", com_col_name="IR_LabAct_COMMENT") %>% 
 	applyScreenTable(wb=translation_wb, sheetname="detConditionTable", startRow=3, flag_col_name="IR_DetCond_FLAG", com_col_name="IR_DetCond_COMMENT")
@@ -60,20 +55,28 @@ acc_data=subset(acc_data, IR_Site_FLAG=='ACCEPT') %>%
 with(acc_data,{table(ActivityMediaName, IR_ActMedia_FLAG)})
 rej_data_flag=subset(acc_data, IR_Site_FLAG=='REJECT' | IR_ActMedia_FLAG=='REJECT' | IR_LabAct_FLAG=='REJECT' | IR_DetCond_FLAG=='REJECT')
 rej_data=plyr::rbind.fill(rej_data, rej_data_flag)
-acc_data=subset(acc_data, IR_Site_FLAG=='ACCEPT' & IR_ActMedia_FLAG=='ACCEPT' & IR_LabAct_FLAG=='ACCEPT' & IR_DetCond_FLAG=='ACCEPT')
+acc_data=subset(acc_data, IR_Site_FLAG=='ACCEPT' & IR_ActMedia_FLAG=='ACCEPT' & (IR_LabAct_FLAG=='ACCEPT' |  IR_LabAct_FLAG=='REVIEW') & IR_DetCond_FLAG=='ACCEPT')
+rm(rej_data_flag)
+
+any(acc_data$CharacteristicName=='Sulfate', na.rm=T)
 
 dim(acc_data)
 dim(rej_data)
 dim(irdata$merged_results)
 dim(merged_results)
+```
 
-## Determine detection conditions and fill NDs
+### Determine detection conditions and fill NDs
+```{r, fill-masked}
 acc_data=fillMaskedValues(results=acc_data, detquantlim=irdata$detquantlim, translation_wb=translation_wb,
 									   detLimitTypeTable_sheetname="detLimitTypeTable", detLimitTypeTable_startRow=3,
 									   unitConvTable_sheetname="unitConvTable", unitConvTable_startRow=1, unitConvTable_startCol=1,
 									   lql_fac=0.5, uql_fac=1)
 
-## Back-fill units for data where unit was NA in data, but existed in detquantlim - adding these records to rejection dataframe
+```
+
+### Back-fill units for data where unit was NA in data, but existed in detquantlim - add records w/o units in either to rejection dataframe
+```{r, fill-units}
 table(is.na(acc_data$ResultMeasure.MeasureUnitCode))
 acc_data=within(acc_data, {
 	ResultMeasure.MeasureUnitCode=ifelse(is.na(ResultMeasure.MeasureUnitCode) & !is.na(IR_Unit), as.character(IR_Unit), as.character(ResultMeasure.MeasureUnitCode))
@@ -85,43 +88,63 @@ table(is.na(acc_data$ResultMeasure.MeasureUnitCode))
 unit_rej_data=subset(acc_data, IR_Unit_FLAG!='ACCEPT')
 rej_data=plyr::rbind.fill(rej_data, unit_rej_data)
 acc_data=subset(acc_data, IR_Unit_FLAG=='ACCEPT')
+rm(unit_rej_data)
+```
+
+### Apply parameter translation table
+```{r, param-trans}
 acc_data=applyScreenTable(acc_data, wb=translation_wb, sheetname="paramTransTable", startRow=4, flag_col_name="IR_Parameter_FLAG", com_col_name="IR_Parameter_COMMENT")
 table(acc_data$IR_Parameter_FLAG, exclude=NULL)
-
-dim(rej_data)
-dim(acc_data)
-dim(merged_results)
+any(acc_data$R3172ParameterName=='Sulfate', na.rm=T)
+```
 
 ### Rejecting data via parameter table, rbind rejected data back to rej_data
-param_rej_data=subset(acc_data, IR_Parameter_FLAG!='ACCEPT')
+```{r, rej-param}
+param_rej_data=subset(acc_data, IR_Parameter_FLAG=='REJECT')
 rej_data=plyr::rbind.fill(rej_data, param_rej_data)
-acc_data=subset(acc_data, IR_Parameter_FLAG=='ACCEPT')
-
+acc_data=subset(acc_data, IR_Parameter_FLAG=='ACCEPT' | IR_Parameter_FLAG=='REVIEW')
+rm(param_rej_data)
 table(droplevels(acc_data$ResultSampleFractionText), acc_data$IR_Fraction, exclude=NULL)
-
 dim(acc_data)
 dim(rej_data)
 dim(merged_results)
 
 table(is.na(acc_data$CAS))
+any(acc_data$R3172ParameterName=='Sulfate', na.rm=T)
+```
+
+```{r, echo=F}
+rm(list=c('nr','nr_sub','nr_na','irdata','merged_results'))
+```
+
+### Assign criteria
+```{r, assign-crit}
+acc_data_criteria=assignCriteria(acc_data, crit_wb='IR_uses_standards_working_v4_ef.xlsx', crit_sheetname='criteria', ss_sheetname='ss_criteria',
+  crit_startRow = 3, ss_startRow = 4, rm_nocrit = TRUE, print = TRUE)
+```
+
+### Update unit conversion table
+```{r, update-uct, eval=FALSE}
+updateUnitConvTable(acc_data_criteria, translation_wb=translation_wb)
+```
+
+### Data prep
+```{r, data-prep}
+prepped_data=dataPrep(data=acc_data_criteria, translation_wb=translation_wb, cf_formulas_sheetname="cf_formulas", crit_wb="IR_uses_standards_working_v4_ef.xlsx", startRow_formulas=3)
+objects(prepped_data)
+```
 
 
 
-## Assign criteria
-stds=as.data.frame(readxl::read_excel('IR_uses_standards_working.xlsx', 'criteria', skip=2))
-names(acc_data)[names(acc_data) %in% names(stds)]
-
-test2=assignCriteria(acc_data, crit_wb='IR_uses_standards_working.xlsx', crit_sheetname='criteria', ss_sheetname='ss_criteria',
-  crit_startRow = 3, ss_startRow = 4, rm_nocrit = FALSE,
-  print = TRUE)
 
 
 
 
 
-## Update unit conversion table
 
-## Data prep
+
+
+
 
 
 

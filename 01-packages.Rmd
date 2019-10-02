@@ -1,18 +1,22 @@
-# Package installs {#packages}
+# Packages {#packages}
 The 2020 IR uses tools developed by Utah DWQ and stored as R-packages. Both packages (wqTools & irTools) are available for review, download, or installation via GitHub.  
 Please see the [wqTools](https://github.com/utah-dwq/wqTools) and [irTools](https://github.com/utah-dwq/irTools) GitHub pages for additional information.
 
+## Package installs
 ```{r, eval=F}
 install.packages("devtools")
 devtools::install_github("utah-dwq/wqTools")
 devtools::install_github("utah-dwq/irTools")
 ```
 
+## Libraries
 ```{r}
 library(wqTools)
 library(irTools)
+library(magrittr)
 ```
 
+## Working directory
 ```{r, eval=F}
 setwd('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment')
 ```

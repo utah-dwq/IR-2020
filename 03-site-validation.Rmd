@@ -60,7 +60,7 @@ autoValidateWQPsites(
 
 ### Final sites file:
 P:\WQ\Integrated Report\IR_2020\2020-IR-assessments\assessment\02_site_validation\master_site_file_08292019_2020IR_final.xlsx
-In translation workbook, also.
+Pasted into translation workbook, also.
 
 
 

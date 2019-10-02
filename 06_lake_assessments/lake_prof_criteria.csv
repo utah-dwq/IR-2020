@@ -1,9 +1,0 @@
-R3172ParameterName,BeneficialUse,NumericCriterion,CriterionUnits,CriterionType,SSC_StartMon
-Dissolved oxygen (DO),3A,4,mg/l,min,
-Dissolved oxygen (DO),3B,3,mg/l,min,
-pH,3A,6.5,,min,
-pH,3A,9,,max,
-pH,3B,6.5,,min,
-pH,3B,9,,max,
-"Temperature, water",3A,20,deg C,max,
-"Temperature, water",3B,27,deg C,max,

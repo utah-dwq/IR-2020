@@ -1,3 +1,27 @@
 01_raw_data
 02_site_validation
 99_external_assessments
+_book
+_bookdown_files
+z_archives
+05_lake_assessments
+asmntDashboard_data.Rdata
+sample_assessed_data.csv
+99_external_assessments/gsl_egg_se/gsl_egg_se_assessment.xlsx
+06_lake_assessments/lake_assessments.Rdata
+06_lake_assessments/lake_data_for_app.Rdata
+06_lake_assessments/lake_phytoplankton.xlsx
+06_lake_assessments/lake_prof_criteria.csv
+06_lake_assessments/lake_profile_asmnts.xlsx
+06_lake_assessments/previous_lake_assessments.csv
+06_lake_assessments/sites.csv
+08_secondary_reviews/Current UPDES permits w_WLAs.xlsx
+08_secondary_reviews/site_use_param_asmnt.csv
+99_external_assessments/gsl_egg_se/gsl_egg_se_assessment.xlsx
+ir_translation_workbook_working.xlsx
+ir_translation_workbook_working_v2_ef.xlsx
+ir_translation_workbook_working_v9_ef.xlsx
+IR_uses_standards_working.xlsx
+prelim_asmnts.Rdata
+prelim_asmnts.xlsx
+ut_facilities.csv

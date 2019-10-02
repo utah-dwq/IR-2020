@@ -16,7 +16,7 @@ downloadWQP(outfile_path='01_raw_data',start_date='10/01/2010', end_date='09/30/
 ```
 
 ## Identify characters in result value column
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 nr = read.csv("01_raw_data\\narrowresult-2019-08-22.csv", na.strings=c("NA", ""))
 dim(nr)
 nr_sub = subset(nr, !is.na(ResultMeasureValue))
@@ -31,7 +31,7 @@ table(droplevels(nr_na$CharacteristicName))
 table(droplevels(nr_na$OrganizationIdentifier))
 ```
 
-*** There are just over 5000 records that cannot be interpreted to numeric values. May want to replace commas, <, >, J, etc.
+*There were just over 5000 records that could not be interpreted to numeric values. Replaced commas, <, >, J, etc.*
 
 ## Replacing special characters
 ```{r, eval=FALSE}
@@ -72,5 +72,4 @@ objects(irdata)
 irdata$sites=subset(irdata$sites, MonitoringLocationIdentifier %in% irdata$merged_results$MonitoringLocationIdentifier)
 write.csv(irdata$sites, "01_raw_data\\sites-2019-08-22.csv", row.names=F)
 ```
-
 

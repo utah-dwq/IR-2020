@@ -1,0 +1,62 @@
+# Toxics and conventionals assessments
+## Define assessment grouping variables
+```{r}
+group_vars = c("IR_MLID", "IR_MLNAME", "IR_Lat", "IR_Long", "ASSESS_ID", "AU_NAME", "BeneficialUse", "BEN_CLASS",
+	"CAS", "IRParameterName", "TargetFraction", "R3172ParameterName", "ParameterGroupName",
+	"AsmntAggPeriod","AsmntAggPeriodUnit", "TableDescription","CriterionLabel","ParameterQualifier","SSC_MLID", "AsmntAggFun")
+```
+
+## Toxics
+### General toxics
+```{r}
+toxics_exc=countExceedances(prepped_data$toxics, group_vars = group_vars)
+toxics_assessed=assessExcCounts(toxics_exc, min_n=4, max_exc_count=1, max_exc_count_id=0)
+with(toxics_assessed, {table(R3172ParameterName, IR_Cat)})
+with(toxics_assessed, {table(ParameterGroupName, IR_Cat)})
+```
+
+### Radium
+#### Cast to wide format & sum as appropriate
+*All radium data are ND values*
+```{r}
+table(droplevels(prepped_data$radium$CharacteristicName))
+table(prepped_data$radium$IR_DetCond)
+radium_cast=reshape2::dcast(prepped_data$radium, IR_MLID+IR_MLNAME+IR_Lat+IR_Long+ASSESS_ID+AU_NAME+BeneficialUse+BEN_CLASS+CAS+IRParameterName+TargetFraction+R3172ParameterName+
+					   ParameterGroupName+AsmntAggPeriod+AsmntAggPeriodUnit+TableDescription+CriterionLabel+ParameterQualifier+SSC_MLID+SSC_StartMon+SSC_EndMon+AsmntAggFun+ActivityStartDate~CharacteristicName, value.var='IR_Value')
+any(!is.na(radium_cast$`Radium-226`) & !is.na(radium_cast$`Radium-228`))
+```
+*No sites/days with both Radium-226 & Radium-228. Only one assessable data point.*
+
+## Conventionals
+### General conventionals (need to remove turbidity assessments)
+```{r}
+conventionals_exc=countExceedances(prepped_data$conventionals, group_vars = group_vars)
+conventionals_assessed=assessExcCounts(conventionals_exc, min_n=10, max_exc_pct=10, max_exc_count_id=1)
+with(conventionals_assessed, {table(R3172ParameterName, IR_Cat)})
+```
+
+### Remove turbidity and assessed DO criteria
+```{r}
+conventionals_assessed=subset(conventionals_assessed, R3172ParameterName!='Turbidity Increase' & !(R3172ParameterName=='Minimum Dissolved Oxygen' & (AsmntAggPeriod==1 | AsmntAggPeriod==7)))
+with(conventionals_assessed, {table(droplevels(R3172ParameterName), IR_Cat)})
+```
+
+### Lakes TDS
+```{r}
+lake_tds_exc=countExceedances(prepped_data$lakes_tds, group_vars = group_vars)
+lake_tds_assessed=assessExcCounts(lake_tds_exc, min_n=2, max_exc_pct=10, max_exc_pct_id=0)
+with(lake_tds_assessed, {table(R3172ParameterName, IR_Cat)})
+```
+
+### Site-specific mean TDS (Blue Creek)
+```{r}
+table(droplevels(prepped_data$agg_tds$ASSESS_ID), droplevels(prepped_data$agg_tds$AU_NAME))
+mean(subset(prepped_data$agg_tds, NumericCriterion==4700)$IR_Value)
+mean(subset(prepped_data$agg_tds, NumericCriterion==3800)$IR_Value)
+ss_mean_tds_exc=countExceedances(prepped_data$agg_tds, group_vars = group_vars)
+ss_mean_tds_assessed=assessExcCounts(ss_mean_tds_exc, min_n=10, max_exc_pct=50, max_exc_count_id=1)
+ss_mean_tds_assessed
+```
+
+
+
