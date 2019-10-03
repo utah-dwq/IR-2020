@@ -102,10 +102,12 @@ profile_data_all=merge(profile_data_all, prof_crit, all.x=T)
 ### Run assessments
 *Note - not accounting for Kens Lake site-specific temperature criterion here. Need to check in secondary review.*
 ```{r}
-table(profile_data_asmnt$R3172ParameterName)
+table(profile_data_asmnt$R3172ParameterName, exclude=NULL)
 prof_asmnts=assessLakeProfiles(profile_data_asmnt)
-table(profile_data_all$R3172ParameterName)
+table(prof_asmnts$profile_asmnts_mlid_param$R3172ParameterName, exclude=NULL)
+table(profile_data_all$R3172ParameterName, exclude=NULL)
 prof_asmnts_all=assessLakeProfiles(profile_data_all)
+table(prof_asmnts_all$profile_asmnts_mlid_param$R3172ParameterName, exclude=NULL)
 ```
 
 ## Trophic data

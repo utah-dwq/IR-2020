@@ -1,12 +1,14 @@
 # Gather & export preliminary assessments & data
 
-
 ## Gather & bind assessments
 ### Internal assessments
 ```{r}
-any(toxics_assessed$BeneficialUse=='CF')
-toxics_assessed=subset(toxics_assessed, BeneficialUse!='CF')
 names(lake_profs_assessed)[names(lake_profs_assessed)=='au_param_Cat2020']='IR_Cat'
+table(lake_profs_assessed$R3172ParameterName)
+lake_profs_assessed=within(lake_profs_assessed, {
+	R3172ParameterName[R3172ParameterName=='Dissolved oxygen (DO)']='Minimum Dissolved Oxygen'
+	R3172ParameterName[R3172ParameterName=='Temperature, water']='Max. Temperature'
+})
 prelim_asmnts=plyr::rbind.fill(conventionals_assessed,lake_tds_assessed,ss_mean_tds_assessed,toxics_assessed, lake_profs_assessed[,!names(lake_profs_assessed) %in% c('PrevCat','au_param_Cat2020','pot_delist','new_listing')])
 ```
 
@@ -22,31 +24,36 @@ hfdo_assessed$R3172ParameterName='High frequency DO'
 hfdo_assessed=irTools::rollUp(list(hfdo_assessed), group_vars = c("BEN_CLASS","IR_MLID","IR_MLNAME","IR_Lat","IR_Long","ASSESS_ID", "AU_NAME", "R3172ParameterName","BeneficialUse"), expand_uses=F, print=F)
 names(hfdo_assessed)[names(hfdo_assessed)=='AssessCat']='IR_Cat'
 external_asmnts=plyr::rbind.fill(gsl_egg_se_assessed, fish_hg_assessed, hfdo_assessed)
-
 ```
 
 ### Combined assessments
 ```{r}
 prelim_asmnts=plyr::rbind.fill(prelim_asmnts, external_asmnts)
-prelim_asmnts$pol_ind=ifelse(prelim_asmnts$ParameterGroupName=='POLLUTION INDICATORS', 'Y', 'N')
+prelim_asmnts$pol_ind=ifelse(prelim_asmnts$ParameterGroupName=='POLLUTION INDICATORS' | prelim_asmnts$R3172ParameterName=='Lakes tier II', 'Y', 'N')
 prelim_asmnts$pol_ind[is.na(prelim_asmnts$pol_ind)]='N'
 any(is.na(prelim_asmnts$IR_Cat))
+```
 
 ## Secondary review input files
 ### Assign review metadata
 #### WMUs
+```{r}
 wmus=unique(acc_data_criteria[,c('ASSESS_ID','AU_Type','Mgmt_Unit')])
 dim(prelim_asmnts)
 prelim_asmnts=merge(prelim_asmnts, wmus, all.x=T)
 dim(prelim_asmnts)
 prelim_asmnts$Mgmt_Unit[prelim_asmnts$BeneficialUse=='5A']='Great Salt Lake'
 any(is.na(prelim_asmnts$Mgmt_Unit))
+```
 
 #### Lakes
+```{r}
 prelim_asmnts$lake=ifelse(prelim_asmnts$AU_Type=='Reservoir/Lake' | prelim_asmnts$BeneficialUse=='5A', 'Y', 'N')
 table(prelim_asmnts$lake, exclude=NULL)
+```
 
 #### Permits
+```{r}
 permits=as.data.frame(readxl::read_excel('08_secondary_reviews/Current UPDES permits w_WLAs.xlsx', 'permits'))
 
 ut_fac1=wqTools::readECHO_fac(p_st="ut", p_act="y")
@@ -68,35 +75,82 @@ names(ut_fac)[names(ut_fac)=="dec_long"]="LongitudeMeasure"
 names(ut_fac)[names(ut_fac)=="dec_lat"]="LatitudeMeasure"
 
 ut_fac=wqTools::assignAUs(ut_fac)
+ut_fac$priority=ifelse(ut_fac$locationID %in% permits$PermitID, 'Y', 'N')
 permits_aus=subset(ut_fac, locationID %in% permits$PermitID)
 
 prelim_asmnts$permit=ifelse(prelim_asmnts$ASSESS_ID %in% permits_aus$ASSESS_ID, 'Y','N')
 table(prelim_asmnts$permit, exclude=NULL)
 
 write.csv(file='ut_facilities.csv', ut_fac, row.names=F)
-
-
-#### New listings (AU scale)
-prelim_asmnts$new_listing=NA
-
-
-### Export files 
-site_use_param_asmnt=irTools::rollUp(list(prelim_asmnts), group_vars = c("BEN_CLASS","IR_MLID","IR_MLNAME","IR_Lat","IR_Long","ASSESS_ID","AU_NAME", "R3172ParameterName","BeneficialUse","pol_ind", "Mgmt_Unit","lake","permit","new_listing"), expand_uses=F)
-site_use_param_asmnt$AU_review='Review needed'
-write.csv(file='08_secondary_reviews/site_use_param_asmnt.csv', site_use_param_asmnt, row.names=F)
-
 ```
 
+#### New listings (AU-parameter scale)
+```{r}
+prelim_asmnts$new_listing=NA
+current_listings=read.csv(file='current_listings.csv')
+prelim_asmnts=merge(prelim_asmnts, current_listings, all.x=T)
+prelim_asmnts$new_listing=ifelse(prelim_asmnts$pol_ind=='N' & prelim_asmnts$IR_Cat=='NS' & is.na(prelim_asmnts$AU_EPACat), 'Y', 'N')
+table(prelim_asmnts$new_listing, exclude=NULL)
+prelim_asmnts$confirmed_listing=ifelse(prelim_asmnts$pol_ind=='N' & prelim_asmnts$IR_Cat=='NS' & !is.na(prelim_asmnts$AU_EPACat), 'Y', 'N')
+table(prelim_asmnts$confirmed_listing, exclude=NULL)
+prelim_asmnts=prelim_asmnts[,!names(prelim_asmnts) %in% c('AU_EPACat','PARAM_NAME')]
+```
 
+### Export files 
+```{r}
+site_use_param_asmnt=irTools::rollUp(list(prelim_asmnts), group_vars = c("BEN_CLASS","IR_MLID","IR_MLNAME","IR_Lat","IR_Long","ASSESS_ID","AU_NAME", "R3172ParameterName", "BeneficialUse", "pol_ind", "Mgmt_Unit","lake","permit","new_listing"), expand_uses=F)
+site_use_param_asmnt=within(site_use_param_asmnt, {
+	site_param_review=NA
+	site_param_review[new_listing=='Y' & permit=='Y'] = 5
+	site_param_review[new_listing=='Y' & permit=='N'] = 4
+	site_param_review[new_listing=='N' & permit=='Y'] = 3
+	site_param_review[new_listing=='N' & permit=='N' & AssessCat=='IDEX' & !ASSESS_ID %in% subset(site_use_param_asmnt, site_param_review %in% c('New listing, permit', 'New listing'))$ASSESS_ID] = 2
+	site_param_review[is.na(site_param_review)] = 1
+})
+table(site_use_param_asmnt$site_param_review, exclude=NULL)
+au_revs=unique(site_use_param_asmnt[,c('ASSESS_ID','site_param_review')])
+au_revs=aggregate(site_param_review~ASSESS_ID, au_revs, 'max')
+names(au_revs)[names(au_revs)=='site_param_review']='au_rev'
+site_use_param_asmnt=merge(site_use_param_asmnt, au_revs, all.x=T)
 
-## Export assessments
+site_use_param_asmnt=within(site_use_param_asmnt, {
+	AU_review=NA
+	AU_review[au_rev==5]='New listing, permit'
+	AU_review[au_rev==4]='New listing'
+	AU_review[au_rev==3]='Permit'
+	AU_review[au_rev==2]='Insufficient data w/ exc'
+	AU_review[au_rev==1]='Review needed, low priority'
+})
+table(site_use_param_asmnt$AU_review, exclude=NULL)
+write.csv(file='08_secondary_reviews/site_use_param_asmnt.csv', site_use_param_asmnt, row.names=F)
+```
+
+#### Secondary review input files
+```{r}
+au_splits=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-splits'))
+au_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-splits'))
+site_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-splits'))
+record_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-splits'))
+sw_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-splits'))
+plyr::d_ply(site_use_param_asmnt, 'Mgmt_Unit',
+	function(sdf) writexl::write_xlsx(list(
+										`site-use-param-asmnt`=sdf, 
+										`au-splits`=au_splits,
+										`au-reviews`=au_reviews,
+										`site-reviews`=site_reviews,
+										`sw-reviews`=sw_reviews,
+										`record-reviews`=record_reviews
+	), path=paste0('08_secondary_reviews/secondary-review-input-', sdf$Mgmt_Unit[1], '.xlsx'), format_headers=F, col_names=T))
+```
+
+#### Export assessments
 ```{r}
 save(acc_data_criteria, conventionals_assessed, conventionals_exc, group_vars, lake_tds_assessed, lake_tds_exc, lake_profs_assessed, prepped_data, prof_asmnts, rej_data, 
 	 ss_mean_tds_assessed, ss_mean_tds_exc, toxics_exc, toxics_assessed, prelim_asmnts, file='prelim_asmnts.Rdata')
 ```
 
-## Write asmntDashboard_data
-*Currently excluding GSL egg, fish Hg, HFDO, & lake profile data*
+#### Write asmntDashboard_data
+*Currently excluding GSL egg, fish Hg, HFDO, macroinvertebrate, & lake profile data. These can be reviewed in other capacities.*
 ### Plot data
 ```{r}
 assessed_data=unique(prepped_data$acc_data[,c("CAS", "ResultIdentifier","ActivityStartDate", "IR_MLID", "IR_MLNAME", "ASSESS_ID", "AU_NAME", 
@@ -113,7 +167,7 @@ criteria=unique(prepped_data$acc_data[,c("CAS", "ActivityStartDate", "IR_MLID", 
 criteria=subset(criteria, !BeneficialUse %in% c('CF', 'SUP'))
 ```
 
-### Build criteria labels
+##### Build criteria labels
 ```{r}
 criteria=within(criteria, {
 	bu=ifelse(TableDescription=='LIST OF HUMAN HEALTH CRITERIA (CONSUMPTION)', paste0('HH-',BeneficialUse), BeneficialUse)
@@ -138,23 +192,15 @@ criteria=criteria[,!names(criteria) %in% c('ts','acc_chron','els','frac','bu')]
 save(assessed_data, criteria, file='asmntDashboard_data.Rdata')
 ```
 
-
-
-
-### Reviewer export file (Elise)
+#### Reviewer export file
 ```{r}
-
-
-
-
-
+compiled_data  = composeExport(prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed)
+save(compiled_data, file = 'reviewer_export_data.Rdata')
 ```
 
 
 
-
-
-## Write assessment Excel file
+#### Write assessment Excel file
 ```{r}
 writexl::write_xlsx(list(
 						site_use_param_asmnt=site_use_param_asmnt,
