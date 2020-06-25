@@ -57,7 +57,7 @@ write.csv(nr, file='01_raw_data/narrowresult-2019-08-22-spec-chars-filled.csv', 
 
 
 ## Import data to workspace
-```{r}
+```{r, eval = F}
 irdata <- readWQPFiles(file_select=FALSE,
             narrowresult_file = "01_raw_data\\narrowresult-2019-08-22-spec-chars-filled.csv",
             sites_file = "01_raw_data\\sites-2019-08-22.csv",
@@ -65,6 +65,7 @@ irdata <- readWQPFiles(file_select=FALSE,
             detquantlim_file = "01_raw_data\\detquantlim-2019-08-22.csv",
             orph_check = TRUE)
 objects(irdata)
+save(irdata, file = "irdata_wqp_raw.Rdata")
 ```
 
 ## Subset to sites w/ data

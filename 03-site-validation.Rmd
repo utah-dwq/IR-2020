@@ -62,7 +62,9 @@ autoValidateWQPsites(
 P:\WQ\Integrated Report\IR_2020\2020-IR-assessments\assessment\02_site_validation\master_site_file_08292019_2020IR_final.xlsx
 Pasted into translation workbook, also.
 
+### Final sites file with SLCOWS sites included (11/15/19):
 
+P:\WQ\Integrated Report\IR_2020\2020-IR-assessments\assessment\02_site_validation\0_master_site_file_SLCOWS_11132019.xlsx
 
 
 

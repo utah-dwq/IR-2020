@@ -26,7 +26,7 @@ profile_data=subset(profile_data, !ResultMeasure.MeasureUnitCode %in% c('mg', 'm
 ```
 
 ### Merge spatial info to data
-```{r}
+```{r, lake-merge-spatial}
 profile_data=merge(profile_data, lake_sites, all.x=T)
 ```
 
@@ -56,7 +56,7 @@ buildMap(sites=lake_sites)
 ```
 
 ### Assign uses to profile data, subset to ALUs
-```{r}
+```{r, lake-assign-uses}
 sites_uses=(assignUses(lake_sites, flatten=T))[,c('MonitoringLocationIdentifier','BeneficialUse','R317Descrp','Water_Type','bu_class')]
 names(sites_uses)[names(sites_uses)=='bu_class']='BEN_CLASS'
 profile_data=merge(profile_data, sites_uses, all.x=T)
@@ -93,11 +93,14 @@ profile_data_all=subset(profile_data_all, BeneficialUse %in% c("3A","3B") & AU_T
 
 
 ### Assign criteria
-```{r}
+```{r, assign-lake-criteria}
 prof_crit=read.csv(file='P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_prof_criteria.csv')
 profile_data_asmnt=merge(profile_data_asmnt, prof_crit, all.x=T)
 profile_data_all=merge(profile_data_all, prof_crit, all.x=T)
 ```
+
+
+test=subset(profile_data_asmnt, IR_MLID=="UTAHDWQ_WQX-4923810" & ActivityStartDate=="2018-09-04")
 
 ### Run assessments
 *Note - not accounting for Kens Lake site-specific temperature criterion here. Need to check in secondary review.*
@@ -112,7 +115,7 @@ table(prof_asmnts_all$profile_asmnts_mlid_param$R3172ParameterName, exclude=NULL
 
 ## Trophic data
 ### Read data from WQP
-```{r}
+```{r, read-trophic-data}
 trophic_params=c('Phosphate-phosphorus','Chlorophyll a', 'Chlorophyll a, uncorrected for pheophytin', 'Chlorophyll a, corrected for pheophytin','Depth, Secchi disk depth')
 trophic_data=readWQP(type='result', siteType='Lake, Reservoir, Impoundment', organization='UTAHDWQ_WQX', characteristicName=trophic_params)
 
@@ -289,8 +292,7 @@ writexl::write_xlsx(list(lake_profile_asmnts=comb_asmnt_au),
 
 ## Save objects
 ```{r}
-lake_profs_assessed=comb_asmnt_au
-save.image('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_assessments.Rdata')
+#save.image('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_assessments.Rdata')
 save(comb_asmnt_au, trophic_data, prof_asmnts_all, phyto_data, file='P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_data_for_app.Rdata')
 ```
 

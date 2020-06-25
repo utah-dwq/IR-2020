@@ -34,6 +34,64 @@ updateLabActMediaTables(update_table_data, translation_wb=translation_wb, labNam
 updateParamTrans(data=update_table_data, detquantlim=irdata$detquantlim,  translation_wb=translation_wb, WQPParamCASID_startRow = 4)
 ```
 
+### Add Salt Lake County Data from Portal
+Salt Lake County field parameters did not make it into the WQP before the end of the call for data. We performed the preliminary assessments and secondary reviews without the SLCo data, but these data were since pulled, run through the site auto-validation, used to update the translation workbook, and at this point will be added to the rest of the data for subsequent data processing steps. For more documentation on the actions taken with the SLCo data, see the Salt Lake County Data Download section.
+
+SLCo data were used to create the updated translation workbook, which also contains the updated master site list.
+
+**Update 6/24/20** We decided to halt all assessments involving SLCo data due to data duplication and upload issues. These sections of the programming will not be run for the draft IR.
+
+#### Read in SLCo Data
+```{r, eval=FALSE, upload-slco}
+# slcodata <- readWQPFiles(file_select=FALSE,
+#             narrowresult_file = "09_SLCOdata\\01_raw_data\\narrowresult-2019-10-22-spec-chars-filled.csv",
+#             sites_file = "09_SLCOdata\\01_raw_data\\sites-2019-10-22.csv",
+#             activity_file = "09_SLCOdata\\01_raw_data\\activity-2019-10-22.csv",
+#             detquantlim_file = "09_SLCOdata\\01_raw_data\\detquantlim-2019-10-22.csv",
+#             orph_check = TRUE)
+# objects(slcodata)
+```
+
+#### Append SLCo Data to rest of IR Data
+```{r, eval = FALSE,add-slco}
+# irdata$merged_results = plyr::rbind.fill(irdata$merged_results, slcodata$merged_results)
+```
+
+#### Reject Records from Secondary Reviews
+
+```{r, eval=FALSE, rejection-files}
+awqms_rejections = as.data.frame(readxl::read_excel('08_secondary_reviews/COMPILED REJECTIONS/AWQMS_rejections_RSP_v2.xlsx', 'record-reviews'))
+blmmoab_rejections = as.data.frame(readxl::read_excel('08_secondary_reviews/COMPILED REJECTIONS/BLM_MOAB_DO_rejections.xlsx', 'record-reviews'))
+crazytempphdo_rejections = as.data.frame(readxl::read_excel('08_secondary_reviews/COMPILED REJECTIONS/crazy_ph_temp_do_values_rejection_template_V2.xlsx', 'record-reviews'))
+flowrev_rejections = as.data.frame(readxl::read_excel('08_secondary_reviews/COMPILED REJECTIONS/flow_review_rejections_by_resultidentifier_v2.xlsx', 'record-reviews'))
+labactcomment_rejections = as.data.frame(readxl::read_excel('08_secondary_reviews/COMPILED REJECTIONS/records_to_reject_lab_activity_comments.xlsx', 'record-reviews'))
+secondaryrev_rejections = as.data.frame(readxl::read_excel('08_secondary_reviews/COMPILED REJECTIONS/rejections_secondary_reviews.xlsx', 'record-reviews'))
+secondaryrev_rejections$ActivityStartDate[4] = "2018-05-29"
+secondaryrev_rejections$ActivityStartDate = as.POSIXct(secondaryrev_rejections$ActivityStartDate)
+
+all_record_rejections = plyr::rbind.fill(awqms_rejections, blmmoab_rejections, crazytempphdo_rejections, flowrev_rejections, labactcomment_rejections, secondaryrev_rejections)
+
+save(all_record_rejections, file = "secondary_review_record_rejections.RData")
+```
+
+
+```{r, load-rdata}
+load("irdata_wqp_raw.Rdata")
+load("secondary_review_record_rejections.RData")
+```
+
+```{r, secondary-review-rejections}
+resultids_reject = as.character(unique(all_record_rejections$ResultIdentifier))
+
+merged_results = subset(irdata$merged_results, !(irdata$merged_results$ResultIdentifier%in%resultids_reject))
+
+rm(awqms_rejections, blmmoab_rejections, crazytempphdo_rejections, flowrev_rejections, labactcomment_rejections, secondaryrev_rejections)
+
+dim(merged_results) # 1351187
+dim(irdata$merged_results) #1362335
+length(resultids_reject)+dim(merged_results)[1]# 1362377
+length(resultids_reject[!(resultids_reject%in%irdata$merged_results$ResultIdentifier)]) #42, likely SLCOWs ResultIdentifiers
+```
 
 
 ### Apply pre-lim screening tables
@@ -42,28 +100,32 @@ updateParamTrans(data=update_table_data, detquantlim=irdata$detquantlim,  transl
 3. Lab/activity
 
 ```{r, apply-screens}
-translation_wb='ir_translation_workbook_working_v9_ef - no IR_Fraction formula.xlsx'
-merged_results=irdata$merged_results %>%
+translation_wb='ir_translation_workbook_working_v13_eh - no IR_Fraction formula.xlsx'
+merged_results_flagged=merged_results %>%
 	applyScreenTable(wb=translation_wb, sheetname="masterSiteTable", startRow=1, flag_col_name="IR_Site_FLAG", com_col_name="IR_Site_COMMENT")
-	rej_data=subset(merged_results, IR_Site_FLAG=='REJECT')
-	acc_data=subset(merged_results, IR_Site_FLAG=='ACCEPT')
+	rej_data=subset(merged_results_flagged, IR_Site_FLAG=='REJECT')
+	acc_data=subset(merged_results_flagged, IR_Site_FLAG=='ACCEPT')
+
+(subset(acc_data, MonitoringLocationIdentifier=='UTAHDWQ_WQX-5916570' & CharacteristicName=='Magnesium'))
+
+
 acc_data=acc_data%>% 
 	applyScreenTable(wb=translation_wb, sheetname="activityMediaNameTable", startRow=1, flag_col_name="IR_ActMedia_FLAG", com_col_name="IR_ActMedia_COMMENT") %>% 
 	applyScreenTable(wb=translation_wb, sheetname="labNameActivityTable", startRow=3, flag_col_name="IR_LabAct_FLAG", com_col_name="IR_LabAct_COMMENT") %>% 
 	applyScreenTable(wb=translation_wb, sheetname="detConditionTable", startRow=3, flag_col_name="IR_DetCond_FLAG", com_col_name="IR_DetCond_COMMENT")
 
+
 with(acc_data,{table(ActivityMediaName, IR_ActMedia_FLAG)})
 rej_data_flag=subset(acc_data, IR_Site_FLAG=='REJECT' | IR_ActMedia_FLAG=='REJECT' | IR_LabAct_FLAG=='REJECT' | IR_DetCond_FLAG=='REJECT')
 rej_data=plyr::rbind.fill(rej_data, rej_data_flag)
 acc_data=subset(acc_data, IR_Site_FLAG=='ACCEPT' & IR_ActMedia_FLAG=='ACCEPT' & (IR_LabAct_FLAG=='ACCEPT' |  IR_LabAct_FLAG=='REVIEW') & IR_DetCond_FLAG=='ACCEPT')
+
+
 rm(rej_data_flag)
 
-any(acc_data$CharacteristicName=='Sulfate', na.rm=T)
-
-dim(acc_data)
-dim(rej_data)
-dim(irdata$merged_results)
-dim(merged_results)
+# COUNT CHECK
+dim(merged_results)[1]==dim(merged_results_flagged)[1]
+dim(acc_data)[1]+dim(rej_data)[1]==dim(merged_results_flagged)[1]
 ```
 
 ### Determine detection conditions and fill NDs
@@ -73,6 +135,7 @@ acc_data=fillMaskedValues(results=acc_data, detquantlim=irdata$detquantlim, tran
 									   unitConvTable_sheetname="unitConvTable", unitConvTable_startRow=1, unitConvTable_startCol=1,
 									   lql_fac=0.5, uql_fac=1)
 
+dim(acc_data)[1]
 ```
 
 ### Back-fill units for data where unit was NA in data, but existed in detquantlim - add records w/o units in either to rejection dataframe
@@ -85,17 +148,20 @@ acc_data=within(acc_data, {
 })
 table(acc_data$ResultMeasure.MeasureUnitCode)
 table(is.na(acc_data$ResultMeasure.MeasureUnitCode))
+any(acc_data$CharacteristicName =='Bis2-Chloroisopropy1Ether')
 unit_rej_data=subset(acc_data, IR_Unit_FLAG!='ACCEPT')
 rej_data=plyr::rbind.fill(rej_data, unit_rej_data)
 acc_data=subset(acc_data, IR_Unit_FLAG=='ACCEPT')
 rm(unit_rej_data)
+
+# COUNT CHECK
+dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1]
 ```
 
 ### Apply parameter translation table
 ```{r, param-trans}
 acc_data=applyScreenTable(acc_data, wb=translation_wb, sheetname="paramTransTable", startRow=4, flag_col_name="IR_Parameter_FLAG", com_col_name="IR_Parameter_COMMENT")
 table(acc_data$IR_Parameter_FLAG, exclude=NULL)
-any(acc_data$R3172ParameterName=='Sulfate', na.rm=T)
 ```
 
 ### Rejecting data via parameter table, rbind rejected data back to rej_data
@@ -104,23 +170,37 @@ param_rej_data=subset(acc_data, IR_Parameter_FLAG=='REJECT')
 rej_data=plyr::rbind.fill(rej_data, param_rej_data)
 acc_data=subset(acc_data, IR_Parameter_FLAG=='ACCEPT' | IR_Parameter_FLAG=='REVIEW')
 rm(param_rej_data)
-table(droplevels(acc_data$ResultSampleFractionText), acc_data$IR_Fraction, exclude=NULL)
-dim(acc_data)
-dim(rej_data)
-dim(merged_results)
+table(acc_data$ResultSampleFractionText, acc_data$IR_Fraction, exclude=NULL)
+# dim(acc_data)
+# dim(rej_data)
+# dim(merged_results)
+
+acc_data=subset(acc_data, IR_Unit_FLAG=='ACCEPT')
 
 table(is.na(acc_data$CAS))
-any(acc_data$R3172ParameterName=='Sulfate', na.rm=T)
+
+screened_data=rej_data
+
+# COUNT CHECK
+dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1]
+
 ```
 
 ```{r, echo=F}
-rm(list=c('nr','nr_sub','nr_na','irdata','merged_results'))
+rm(nr,nr_sub,nr_na,irdata,merged_results,slcodata,rej_data)
 ```
 
-### Assign criteria
+### Assign criteria and track which data do not have criteria
 ```{r, assign-crit}
+memory.limit(size=56000)
 acc_data_criteria=assignCriteria(acc_data, crit_wb='IR_uses_standards_working_v4_ef.xlsx', crit_sheetname='criteria', ss_sheetname='ss_criteria',
   crit_startRow = 3, ss_startRow = 4, rm_nocrit = TRUE, print = TRUE)
+
+acc_data_nocrit = subset(acc_data, !(acc_data$ResultIdentifier%in%acc_data_criteria$ResultIdentifier))
+
+# COUNT CHECK
+length(unique(acc_data$ResultIdentifier))-length(unique(acc_data_criteria$ResultIdentifier))==length(unique(acc_data_nocrit$ResultIdentifier))
+
 ```
 
 ### Update unit conversion table
@@ -130,23 +210,10 @@ updateUnitConvTable(acc_data_criteria, translation_wb=translation_wb)
 
 ### Data prep
 ```{r, data-prep}
+memory.limit(size=56000)
 prepped_data=dataPrep(data=acc_data_criteria, translation_wb=translation_wb, cf_formulas_sheetname="cf_formulas", crit_wb="IR_uses_standards_working_v4_ef.xlsx", startRow_formulas=3)
 objects(prepped_data)
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

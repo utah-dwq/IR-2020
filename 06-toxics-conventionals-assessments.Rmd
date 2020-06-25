@@ -3,7 +3,7 @@
 ```{r}
 group_vars = c("IR_MLID", "IR_MLNAME", "IR_Lat", "IR_Long", "ASSESS_ID", "AU_NAME", "BeneficialUse", "BEN_CLASS",
 	"CAS", "IRParameterName", "TargetFraction", "R3172ParameterName", "ParameterGroupName",
-	"AsmntAggPeriod","AsmntAggPeriodUnit", "TableDescription","CriterionLabel","ParameterQualifier","SSC_MLID", "AsmntAggFun")
+	"AsmntAggPeriod","AsmntAggPeriodUnit", "TableNumber","TableDescription","CriterionLabel","ParameterQualifier","SSC_MLID", "AsmntAggFun")
 ```
 
 ## Toxics
