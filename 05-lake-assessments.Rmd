@@ -1,6 +1,11 @@
 # Lake assessments
 Manually side-stepping much of the IR data process for lake profile and trophic assessments.
 
+```{r, include=FALSE}
+knitr::opts_chunk$set(eval=FALSE)
+```
+
+
 ## Profile data
 ### Read data from WQP
 *Note. Querying long term data for visualization and review purposes, but only assessing data within IR POR. For this analysis, limiting data to UTAHDWQ_WQX organization because these samples include the profile measurements required for lake assessments.*

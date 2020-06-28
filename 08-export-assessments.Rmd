@@ -1,0 +1,358 @@
+# Gather & export preliminary assessments & data
+
+## Gather & bind assessments
+### Internal assessments
+```{r}
+lake_profs_assessed=as.data.frame(readxl::read_excel('lake_profile_asmnts.xlsx', 'lake_profile_asmnts'))
+# lake_profs_assessed=comb_asmnt_au
+names(lake_profs_assessed)[names(lake_profs_assessed)=='au_param_Cat2020']='IR_Cat'
+table(lake_profs_assessed$R3172ParameterName)
+lake_profs_assessed=within(lake_profs_assessed, {
+	R3172ParameterName=as.character(R3172ParameterName)
+	R3172ParameterName[R3172ParameterName=='Dissolved oxygen (DO)']='Minimum Dissolved Oxygen'
+	R3172ParameterName[R3172ParameterName=='Temperature, water']='Max. Temperature'
+})
+prelim_asmnts=plyr::rbind.fill(conventionals_assessed,lake_tds_assessed,ss_mean_tds_assessed,toxics_assessed, assessed_ecoli$ecoli_mlid_asmnts,lake_profs_assessed[,!names(lake_profs_assessed) %in% c('PrevCat','au_param_Cat2020','pot_delist','new_listing')])
+```
+
+### One parameter-site rejection from secondary review
+One site along the Provo River was rejected for dissolved oxygen readings because the sample pulls from the bottom of Deer Creek Reservoir (below dam).
+```{r}
+reject = data.frame(IR_MLID="UTAHDWQ_WQX-5913210",R3172ParameterName="Minimum Dissolved Oxygen",Remove = "1")
+prelim_asmnts = merge(prelim_asmnts, reject, all.x = TRUE)
+prelim_asmnts = subset(prelim_asmnts, is.na(prelim_asmnts$Remove))
+prelim_asmnts = prelim_asmnts[,!names(prelim_asmnts)%in%c("Remove")]
+```
+
+
+### External assessments
+This section adds the Great Salt Lake egg selenium, fish tissue mercury, high frequency dissolved oxygen, Snowbird, and E.coli advisory and sampling assessments. Note that per our meeting with Nick von Stackelberg on dissolved oxygen holding capacity in high elevation waters, we are only assessing the 30-day average this cycle for the high frequency assessment.
+
+Additionally, the Snowbird assessments occur at sites that are not included within the master site file because they did not come through the WQP.
+```{r, eval = F}
+gsl_egg_se_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/gsl_egg_se/gsl_egg_se_assessment.xlsx', 'asmnt'))
+names(gsl_egg_se_assessed)[names(gsl_egg_se_assessed)=='AssessCat']='IR_Cat'
+fish_hg_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/fish_tissue/3_draft_fishtissue_hgassessment_v2_ef.xlsx', 'asmnt'))
+fish_hg_assessed=fish_hg_assessed[,!names(fish_hg_assessed) %in% 'Category to Report']
+names(fish_hg_assessed)[names(fish_hg_assessed)=='AssessCat']='IR_Cat'
+hfdo_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/hfdo/hfdo_assessed_review.xlsx', 'HFDO_asmnts'))
+hfdo_assessed = subset(hfdo_assessed, hfdo_assessed$AsmntAggPeriod==30)
+hfdo_assessed$R3172ParameterName='High frequency DO'
+hfdo_assessed=irTools::rollUp(list(hfdo_assessed), group_vars = c("BEN_CLASS","IR_MLID","IR_MLNAME","IR_Lat","IR_Long","ASSESS_ID", "AU_NAME", "R3172ParameterName","BeneficialUse"), expand_uses=F, print=F)
+hfdo_assessed=within(hfdo_assessed, {
+	IR_Lat=wqTools::facToNum(IR_Lat)
+	IR_Long=wqTools::facToNum(IR_Long)
+})
+names(hfdo_assessed)[names(hfdo_assessed)=='AssessCat']='IR_Cat'
+ecoli_adv_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/ecoli/3_draft_ecoliadvisory_assessment_v3_ef.xlsx', 'Sheet1'))
+names(ecoli_adv_assessed)[names(ecoli_adv_assessed)=='AssessCat']='IR_Cat'
+snowbird_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/snowbird/snowbird_asmnt.xlsx', 'asmnt'))
+names(snowbird_assessed)[names(snowbird_assessed)=='AssessCat']='IR_Cat'
+snowbird_assessed=within(snowbird_assessed, {
+	IR_Lat=wqTools::facToNum(IR_Lat)
+	IR_Long=wqTools::facToNum(IR_Long)
+})
+external_asmnts=plyr::rbind.fill(gsl_egg_se_assessed, fish_hg_assessed, hfdo_assessed, ecoli_adv_assessed, snowbird_assessed)
+save(external_asmnts, file = paste0("external_assessments",Sys.Date(),".RData"))
+```
+
+### Combined assessments
+```{r}
+load("external_assessments2020-06-27.RData") # remember to change if any changes occur to external assessments
+prelim_asmnts=plyr::rbind.fill(prelim_asmnts, external_asmnts)
+prelim_asmnts$pol_ind=ifelse(prelim_asmnts$ParameterGroupName=='POLLUTION INDICATORS' | prelim_asmnts$R3172ParameterName=='Lakes tier II', 'Y', 'N')
+prelim_asmnts$pol_ind[is.na(prelim_asmnts$pol_ind)]='N'
+any(is.na(prelim_asmnts$IR_Cat))
+```
+
+#### Removal of AU-parameter scale assessments
+In the secondary review process, we found an uploading issue with SLCo data submitted by DWQ as a cooperator, and SLCo data submitted to the Water Quality Portal. There were discrepancies in the parameters uploaded, but also a range of records with (almost, but not entirely) duplicated values. It was unclear which records were the true records to keep for assessment, so we determined the best way forward is to defer ALL assessments of parameters for which there is SLCo-submitted OR DWQ-submitted data to the next cycle. Below is the step to remove all data associated with this effort.
+```{r, echo = FALSE, eval = FALSE}
+# au_param_rej=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/COMPILED REJECTIONS/AU_param_rejections_SLCo_data_discrepancies_v2.xlsx', 'au-reviews'))
+# save(au_param_rej, file = "au_parameter_rejections_slco.RData")
+```
+
+
+```{r}
+load("au_paramter_rejections_slco.RData")
+au_param_rej$SLCo_flag = "REJECT"
+asmt_rej_merge = merge(prelim_asmnts, au_param_rej, all.x = TRUE)
+rejected_records_slco_aus = subset(asmt_rej_merge, asmt_rej_merge$SLCo_flag=="REJECT")
+
+prelim_asmnts = subset(asmt_rej_merge, is.na(asmt_rej_merge$SLCo_flag))
+prelim_asmnts = prelim_asmnts[,!names(prelim_asmnts)%in%c("SLCo_flag")]
+```
+
+
+## Secondary review input files
+### Assign review metadata
+#### WMUs
+```{r}
+prelim_asmnts = prelim_asmnts[,!names(prelim_asmnts)%in%c("Mgmt_Unit","AU_Type")]
+wmus=unique(acc_data_criteria[,c('ASSESS_ID','AU_Type','Mgmt_Unit')])
+dim(prelim_asmnts)
+prelim_asmnts=merge(prelim_asmnts, wmus, all.x=T)
+dim(prelim_asmnts)
+prelim_asmnts$Mgmt_Unit[prelim_asmnts$BeneficialUse=='5A']='Great Salt Lake'
+any(is.na(prelim_asmnts$Mgmt_Unit))
+```
+
+#### Lakes
+```{r}
+prelim_asmnts$lake=ifelse(prelim_asmnts$AU_Type=='Reservoir/Lake' | prelim_asmnts$BeneficialUse=='5A', 'Y', 'N')
+table(prelim_asmnts$lake, exclude=NULL)
+```
+
+#### Permits
+```{r}
+permits=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/Permits/Current UPDES permits w_WLAs.xlsx", 'permits'))
+
+ut_fac1=wqTools::readECHO_fac(p_st="ut", p_act="y")
+fac_coords1=do.call(rbind.data.frame,ut_fac1$geometry$coordinates)
+names(fac_coords1)=c("dec_long","dec_lat")
+fac_coords1=data.frame(ut_fac1$properties[,c("SourceID","CWPName","CWPFacilityTypeIndicator")], (fac_coords1))
+
+permits2=subset(permits, !PermitID %in% ut_fac1$properties$SourceID)
+ut_fac2=wqTools::readECHO_fac(p_pid=permits2$PermitID)
+fac_coords2=do.call(rbind.data.frame,ut_fac2$geometry$coordinates)
+names(fac_coords2)=c("dec_long","dec_lat")
+fac_coords2=data.frame(ut_fac2$properties[,c("SourceID","CWPName","CWPFacilityTypeIndicator")], (fac_coords2))
+
+ut_fac=rbind(fac_coords1, fac_coords2)
+names(ut_fac)[names(ut_fac)=="SourceID"]="locationID"
+names(ut_fac)[names(ut_fac)=="CWPName"]="locationName"
+names(ut_fac)[names(ut_fac)=="CWPFacilityTypeIndicator"]="locationType"
+names(ut_fac)[names(ut_fac)=="dec_long"]="LongitudeMeasure"
+names(ut_fac)[names(ut_fac)=="dec_lat"]="LatitudeMeasure"
+
+ut_fac=wqTools::assignAUs(ut_fac)
+ut_fac$priority=ifelse(ut_fac$locationID %in% permits$PermitID, 'Y', 'N')
+permits_aus=subset(ut_fac, locationID %in% permits$PermitID)
+
+prelim_asmnts$permit=ifelse(prelim_asmnts$ASSESS_ID %in% permits_aus$ASSESS_ID, 'Y','N')
+table(prelim_asmnts$permit, exclude=NULL)
+
+write.csv(file='ut_facilities.csv', ut_fac, row.names=F)
+```
+
+#### New listings (AU-parameter scale)
+```{r}
+prelim_asmnts$new_listing=NA
+current_listings=read.csv(file='current_listings.csv')
+prelim_asmnts=merge(prelim_asmnts, current_listings, all.x=T)
+prelim_asmnts$new_listing=ifelse(prelim_asmnts$pol_ind=='N' & prelim_asmnts$IR_Cat=='NS' & is.na(prelim_asmnts$AU_EPACat), 'Y', 'N')
+table(prelim_asmnts$new_listing, exclude=NULL)
+prelim_asmnts$confirmed_listing=ifelse(prelim_asmnts$pol_ind=='N' & prelim_asmnts$IR_Cat=='NS' & !is.na(prelim_asmnts$AU_EPACat), 'Y', 'N')
+table(prelim_asmnts$confirmed_listing, exclude=NULL)
+prelim_asmnts=prelim_asmnts[,!names(prelim_asmnts) %in% c('AU_EPACat','PARAM_NAME')]
+```
+
+### Export files 
+```{r}
+site_use_param_asmnt=irTools::rollUp(list(prelim_asmnts), group_vars = c("BEN_CLASS","IR_MLID","IR_MLNAME","IR_Lat","IR_Long","ASSESS_ID","AU_NAME", "R3172ParameterName", "BeneficialUse", "pol_ind", "Mgmt_Unit","lake","permit","new_listing"), expand_uses=F)
+
+site_use_param_asmnt=within(site_use_param_asmnt, {
+	site_param_review=NA
+	site_param_review[new_listing=='Y' & permit=='Y' & pol_ind=='N'] = 5
+	site_param_review[new_listing=='Y' & permit=='N' & pol_ind=='N'] = 4
+	site_param_review[new_listing=='N' & permit=='Y'] = 3
+	site_param_review[new_listing=='N' & permit=='N'  & pol_ind=='N' & AssessCat=='IDEX' & !ASSESS_ID %in% subset(site_use_param_asmnt, site_param_review %in% c('New listing, permit', 'New listing'))$ASSESS_ID] = 2
+	site_param_review[is.na(site_param_review)] = 1
+})
+table(site_use_param_asmnt$site_param_review, exclude=NULL)
+au_revs=unique(site_use_param_asmnt[,c('ASSESS_ID','site_param_review')])
+au_revs=aggregate(site_param_review~ASSESS_ID, au_revs, 'max')
+names(au_revs)[names(au_revs)=='site_param_review']='au_rev'
+site_use_param_asmnt=merge(site_use_param_asmnt, au_revs, all.x=T)
+
+site_use_param_asmnt=within(site_use_param_asmnt, {
+	AU_review=NA
+	AU_review[au_rev==5]='New listing, permit'
+	AU_review[au_rev==4]='New listing'
+	AU_review[au_rev==3]='Permit'
+	AU_review[au_rev==2]='New insufficient data w/ exc'
+	AU_review[au_rev==1]='Review needed, low priority'
+})
+table(site_use_param_asmnt$AU_review, exclude=NULL)
+write.csv(file='site_use_param_asmnt_06282020.csv', site_use_param_asmnt, row.names=F)
+```
+
+#### Secondary review input files
+```{r, eval = F}
+au_splits=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-splits'))
+au_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-reviews'))
+site_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'site-reviews'))
+record_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'record-reviews'))
+sw_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'sw-reviews'))
+plyr::d_ply(site_use_param_asmnt, 'Mgmt_Unit',
+	function(sdf) writexl::write_xlsx(list(
+										`site-use-param-asmnt`=sdf, 
+										`au-splits`=au_splits,
+										`au-reviews`=au_reviews,
+										`site-reviews`=site_reviews,
+										`sw-reviews`=sw_reviews,
+										`record-reviews`=record_reviews
+	), path=paste0('08_secondary_reviews/0_new_secondary_review_files/secondary-review-input-', sdf$Mgmt_Unit[1], '.xlsx'), format_headers=F, col_names=T))
+```
+
+#### Export assessments
+```{r}
+# Rename some objects to make them easier to remember and use
+accepted_data_screened = acc_data
+accepted_data_screened_flattened_criteria = acc_data_criteria
+accepted_data_flattened_criteria_dataprep = prepped_data$acc_data
+data_used_in_assessments_allcolumns = subset(acc_data, acc_data$ResultIdentifier%in%unique(accepted_data_flattened_criteria_dataprep$ResultIdentifier))
+accepted_data = list(accepted_data_screened, accepted_data_screened_flattened_criteria, accepted_data_flattened_criteria_dataprep, data_used_in_assessments_allcolumns)
+
+rejected_data_screened = screened_data
+rejected_data_dataprep_flattened_reasons = prepped_data$rej_data_reasons
+accepted_data_screened_no_criteria = acc_data_nocrit
+rejected_data = list(rejected_data_screened, rejected_data_dataprep_flattened_reasons, accepted_data_screened_no_criteria)
+
+rm(accepted_data_screened, accepted_data_screened, accepted_data_screened_flattened_criteria, accepted_data_flattened_criteria_dataprep, rejected_data_screened, rejected_data_dataprep_flattened_reasons, accepted_data_screened_no_criteria, data_used_in_assessments_allcolumns)
+
+grouping_columns_rollup = group_vars
+lake_assessments = list(lake_tds_assessed,lake_tds_exc,lake_profs_assessed)
+site_specific_tds_assessments = list(ss_mean_tds_assessed, ss_mean_tds_exc)
+toxics_and_conventionals_assessments = list(conventionals_assessed, conventionals_exc, toxics_assessed, toxics_exc)
+
+save(accepted_data, rejected_data, grouping_columns_rollup,lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, prelim_asmnts, file='prelim_asmnts_06272020.Rdata')
+```
+
+#### Write out screened & dataPrep rejected data
+```{r}
+#write.csv(file='screened_data.csv', screened_data)
+#write.csv(file='prep_rej_data.csv', prepped_data$rej_data_reasons)
+```
+
+
+#### Write asmntDashboard_data
+*Currently excluding GSL egg, fish Hg, HFDO, macroinvertebrate, & lake profile data. These can be reviewed in other capacities.*
+### Plot data
+```{r}
+assessed_data=unique(prepped_data$acc_data[,c("CAS", "ResultIdentifier","ActivityStartDate", "IR_MLID", "IR_MLNAME", "ASSESS_ID", "AU_NAME", 
+									"AU_Type", "BEN_CLASS", "IRParameterName", "R3172ParameterName", "IR_Value", "IR_Unit", "CriterionUnits",
+									"IR_DetCond", "IR_Fraction", "IR_ActivityType", "IR_Lat", "IR_Long", 
+									"DataLoggerLine", "ActivityRelativeDepthName", "ActivityDepthHeightMeasure.MeasureValue", 
+									"R317Descrp", "ActivityDepthHeightMeasure.MeasureUnitCode")
+					])
+criteria=unique(prepped_data$acc_data[,c("CAS", "ActivityStartDate", "IR_MLID", "IR_MLNAME", "BeneficialUse", 
+   								"R3172ParameterName", "CriterionUnits", "TargetFraction", "CriterionLabel", 
+   								"CriterionType", "NumericCriterion","TableDescription", "ParameterQualifier", 
+   								"FrequencyCombined", "FrequencyNumber", "FrequencyUnit", "TargetActivityType")
+				])
+criteria=subset(criteria, !BeneficialUse %in% c('CF', 'SUP'))
+```
+
+##### Build criteria labels
+```{r}
+criteria=within(criteria, {
+	bu=ifelse(TableDescription=='LIST OF HUMAN HEALTH CRITERIA (CONSUMPTION)', paste0('HH-',BeneficialUse), BeneficialUse)
+	frac=tolower(TargetFraction)
+	els=ifelse(ParameterQualifier %in% c('early life stages are present','Fish Early Life Stages are Present'), 'ELS', NA)
+	acc_chron=ifelse(CriterionLabel =='Acute', 'acute', 'chronic')
+	ts=ifelse(R3172ParameterName=='Minimum Dissolved Oxygen' | R3172ParameterName=='E. coli', paste0(FrequencyNumber, ' day ', tolower(FrequencyCombined)), NA)
+	ts=gsub('NA day', 'daily', ts)
+	ts=gsub('average', 'avg', ts)
+	ts=gsub('minimum', 'min', ts)
+	label=paste(bu, R3172ParameterName, ts, els, acc_chron, frac) 
+	label=gsub('Minimum Dissolved Oxygen', 'DO', label)
+	label=gsub('Max. Temperature', 'Temperature', label)
+	label=gsub(' NA', '', label)
+	label=gsub('dissolved', '(diss)', label)
+	label=gsub('total', '(tot)', label)
+	label=gsub('none', '', label)
+	label=gsub('daily maximum', 'max', label)
+	label=gsub('geometric mean', 'geomean', label)
+	label=ifelse(R3172ParameterName=='pH' | R3172ParameterName=='Total Dissolved Solids', paste(label, CriterionType), label)
+})
+head(subset(criteria, R3172ParameterName=='Total Dissolved Solids'))
+
+criteria=criteria[,!names(criteria) %in% c('ts','acc_chron','els','frac','bu')]
+save(assessed_data, criteria, file='asmntDashboard_data_v4.Rdata')
+```
+
+#### Reviewer export file
+```{r}
+compiled_data = composeExport(screened_data = screened_data, prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, include_rejected = FALSE, create_workbooks = FALSE)
+save(compiled_data, file = 'reviewer_export_data_v4.Rdata')
+```
+
+
+#### Write assessment Excel file
+```{r, eval=T}
+writexl::write_xlsx(list(
+						site_use_param_asmnt=site_use_param_asmnt,
+						prelim_asmnts=prelim_asmnts,
+						lake_prof_asmnts=lake_profs_assessed,
+						conventionals=subset(prepped_data$acc_data, AssessmentType=='Conventional'),
+						toxics=subset(prepped_data$acc_data, AssessmentType=='Toxic'),
+						supplement=subset(prepped_data$acc_data, AssessmentType=='All'),
+						ecoli=subset(prepped_data$acc_data, AssessmentType=='Ecoli')
+					),
+		path = 'prelim_asmnts_v4.xlsx', format_headers=F, col_names=T)
+```
+
+
+```{r, eval=F}
+data=prepped_data$toxics
+data$NumericCriterion=wqTools::facToNum(data$NumericCriterion)
+data=within(data, {
+	bu=ifelse(TableDescription=='LIST OF HUMAN HEALTH CRITERIA (CONSUMPTION)', paste0('HH-',BeneficialUse), BeneficialUse)
+	frac=tolower(TargetFraction)
+	els=ifelse(ParameterQualifier %in% c('early life stages are present','Fish Early Life Stages are Present'), 'ELS', NA)
+	acc_chron=ifelse(CriterionLabel =='Acute', 'acute', 'chronic')
+	ts=ifelse(R3172ParameterName=='Minimum Dissolved Oxygen' | R3172ParameterName=='E. coli', paste0(FrequencyNumber, ' day ', tolower(FrequencyCombined)), NA)
+	ts=gsub('NA day', 'daily', ts)
+	ts=gsub('average', 'avg', ts)
+	ts=gsub('minimum', 'min', ts)
+	label=paste(bu, R3172ParameterName, ts, els, acc_chron, frac) 
+	label=gsub('Minimum Dissolved Oxygen', 'DO', label)
+	label=gsub('Max. Temperature', 'Temperature', label)
+	label=gsub(' NA', '', label)
+	label=gsub('dissolved', '(diss)', label)
+	label=gsub('total', '(tot)', label)
+	label=gsub('none', '', label)
+	label=gsub('daily maximum', 'max', label)
+	label=gsub('geometric mean', 'geomean', label)
+	label=ifelse(R3172ParameterName=='pH' | R3172ParameterName=='Total Dissolved Solids', paste(label, CriterionType), label)
+})
+
+library(plotly)
+plot_data=unique(data[data$R3172ParameterName!='Pentachlorophenol' & data$R3172ParameterName!='Total Ammonia as N',c('NumericCriterion','hardness','R3172ParameterName','CriterionLabel')])
+plot_data=dplyr::sample_frac(plot_data, 0.1)
+plot_data$label=paste(plot_data$R3172ParameterName, tolower(plot_data$CriterionLabel))
+hardness_dep_crit_plot=plot_ly(data=plot_data) %>%
+	add_lines(x=~hardness, y=~NumericCriterion, color=~label) %>%
+		layout(
+			title = "Hardness dependent criteria",
+			xaxis = list(title = "Hardness (mg/L)"),
+			yaxis = list(side = 'left', title = 'Criterion (ug/L)')#,
+			#legend = list(x = 0.01, y = 0.99)
+		) %>% 
+		config(displaylogo = FALSE,
+			modeBarButtonsToRemove = c(
+				'sendDataToCloud',
+				'hoverClosestCartesian',
+				'hoverCompareCartesian',
+				'lasso2d',
+				'select2d'
+			)
+		)
+#hardness_dep_crit_plot
+#save(file='C:/Users/jvander/Documents/R/dwq-R-tools-presentation/figures/hardness_dep_crit.Rdata', hardness_dep_crit_plot)
+#htmlwidgets::saveWidget(hardness_dep_crit_plot, file='C:/Users/jvander/Documents/R/dwq-R-tools-presentation/figures/hardness_dep_crit.html')
+api_create(hardness_dep_crit_plot, filename="hardness-dep-crit")
+```
+
+
+#### Generate merged site & AU assessments
+```{r, eval=T}
+asmnts=read.csv(file="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/site_use_param_asmnt_withSLCO-4Dec2019.csv")
+site_asmnts=irTools::rollUp(list(asmnts), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
+names(site_asmnts)[names(site_asmnts)=="AssessCat"]="site_asmnt"
+au_asmnts=irTools::rollUp(list(asmnts), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
+names(au_asmnts)[names(au_asmnts)=="AssessCat"]="au_asmnt"
+site_au_asmnts=merge(site_asmnts, au_asmnts, all.x=T)
+write.csv(file="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/site_au_asmnts_merged.csv", site_au_asmnts, row.names=F)
+```

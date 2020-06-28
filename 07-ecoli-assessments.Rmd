@@ -1,0 +1,63 @@
+# E.coli assessments
+## Remove WY2010 Records
+WY2010 is only represented by the month of October, and we do not want to assess the 2010 recreation season in the 2018/2020 IR.
+```{r}
+ecoli_dat_assess = prepped_data$ecoli
+orig_rec = dim(ecoli_dat_assess)[1]
+
+## Remove 2010 data since it only contains October
+ecoli_dat_notassess = ecoli_dat_assess[grepl("2010",as.character(ecoli_dat_assess$ActivityStartDate)),] # ADD TO REJECTED DATA
+rej_rec = dim(ecoli_dat_notassess)[1]
+ecoli_dat_notassess$IR_Cat = "Not Assessed - Out of POR"
+ecoli_dat_notassess$ActivityStartDate = as.character(ecoli_dat_notassess$ActivityStartDate)
+
+ecoli_dat_assess = ecoli_dat_assess[!grepl("2010",as.character(ecoli_dat_assess$ActivityStartDate)),]
+ecoli_dat_assess = droplevels(ecoli_dat_assess)
+new_rec = dim(ecoli_dat_assess)[1]
+
+new_rec+rej_rec==orig_rec
+
+```
+
+### Change detection limit values
+```{r}
+ecoli_dat_assess$IR_Value = ifelse(ecoli_dat_assess$IR_DetCond=="OD",2420,ecoli_dat_assess$IR_Value)
+ecoli_dat_assess$IR_Value = ifelse(ecoli_dat_assess$IR_DetCond=="ND",1,ecoli_dat_assess$IR_Value)
+
+```
+
+### E.coli assessment 
+```{r}
+assessed_ecoli = assessEColi(data = ecoli_dat_assess)
+
+assessed_ecoli$non_assessed_data$ActivityStartDate = as.character(assessed_ecoli$non_assessed_data$ActivityStartDate)
+
+# Combine all rejected data
+assessed_ecoli$non_assessed_data = plyr::rbind.fill(assessed_ecoli$non_assessed_data, ecoli_dat_notassess)
+
+# save(assessed_ecoli, file = paste0("ecoli_assessed_review_",Sys.Date(),".RData"))
+```
+
+```{r, echo = FALSE}
+length(unique(assessed_ecoli$assessed_data$IR_MLID)) # 951
+length(unique(assessed_ecoli$dailyaggregated_data$IR_MLID)) # 951
+length(unique(assessed_ecoli$ecoli_allscenario_asmnts$IR_MLID)) # 951
+length(unique(assessed_ecoli$ecoli_scenario_rollup$IR_MLID)) # 951
+length(unique(assessed_ecoli$ecoli_mlid_asmnts$IR_MLID)) # 951
+
+
+mlids = unique(assessed_ecoli$ecoli_scenario_rollup$IR_MLID)
+mlids1 = unique(assessed_ecoli$ecoli_mlid_asmnts$IR_MLID)
+dropped_mlids = mlids[!mlids%in%mlids1]
+
+# order in sheet by importance rather than by creation
+reversenams = names(assessed_ecoli)
+reversenams = rev(reversenams)
+assessed_ecoli2 = assessed_ecoli[reversenams]
+assessed_ecoli2$raw_data = NULL
+
+require(openxlsx)
+write.xlsx(assessed_ecoli2, file = paste0("ecoli_assessed_review_",Sys.Date(),".xlsx"))
+rm(mlids, mlids1, reversenams,dropped_mlids)
+```
+

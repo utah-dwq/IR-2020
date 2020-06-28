@@ -1,0 +1,149 @@
+# Salt Lake County Data Download and Run Through irTools
+SLCO submits ample data to DWQ for the Integrated Report. As part of the Call for Data, SLCO intended to submit water quality data to EPA's Water Quality Portal. Due to a series of miscommunications, these data appeared in the WQP after the IR Team's pull of WQ data over the period of record (Oct 1, 2010 - September 30, 2018). Because the WQP has a fluid process for identifying records in the portal at any given time, SLCO data must be pulled separately and run through the assessment steps in isolation. 
+
+**NOTE** Duplicate records exist between the SLCO OrgID and the DWQ Cooperator OrgID. These will need to be sorted out in the secondary review stage.
+
+
+## Working directory
+```{r, eval=F}
+setwd('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/09_SLCOdata')
+```
+
+## Download sites
+```{r, eval=FALSE}
+downloadWQP(outfile_path='01_raw_data', zip=FALSE, organization="SLCOWS", retrieve="sites")
+```
+## Download narrowresult, activity, and detection/quantitation
+```{r, eval=FALSE}
+downloadWQP(outfile_path='01_raw_data',start_date='10/01/2010', end_date='09/30/2018', organization="SLCOWS",zip=TRUE, unzip=TRUE, retrieve=c("narrowresult", "activity", "detquantlim"))
+```
+
+## Identify characters in result value column
+```{r, eval=FALSE}
+nr = read.csv("09_SLCOdata\\01_raw_data\\narrowresult-2019-10-22.csv", na.strings=c("NA", ""))
+dim(nr)
+nr_sub = subset(nr, !is.na(ResultMeasureValue))
+dim(nr_sub)
+
+nr_sub$RMV_num=wqTools::facToNum(nr_sub$ResultMeasureValue)
+table(is.na(nr_sub$RMV_num))
+
+nr_na=subset(nr_sub, is.na(RMV_num))
+
+table(droplevels(nr_na$CharacteristicName))
+table(droplevels(nr_na$OrganizationIdentifier))
+```
+
+*There were just under 2000 records that could not be interpreted to numeric values. Replaced commas, <, >, J, etc.*
+
+## Replacing special characters
+```{r, eval=FALSE}
+nr=within(nr, {
+	gsub(",", "", ResultMeasureValue)
+	gsub("< ", "", ResultMeasureValue)
+	gsub("<", "", ResultMeasureValue)
+	gsub(">", "", ResultMeasureValue)
+	gsub(" J", "", ResultMeasureValue)
+})
+nr_sub = subset(nr, !is.na(ResultMeasureValue))
+dim(nr_sub)
+nr_sub$RMV_num=wqTools::facToNum(nr_sub$ResultMeasureValue)
+table(is.na(nr_sub$RMV_num))
+nr_na=subset(nr_sub, is.na(RMV_num))
+table(droplevels(nr_na$CharacteristicName))
+```
+
+## Write NR back to file
+```{r, eval=FALSE}
+write.csv(nr, file='09_SLCOdata/01_raw_data/narrowresult-2019-10-22-spec-chars-filled.csv', row.names=F)
+```
+
+
+## Import data to workspace
+```{r, eval = F}
+slcodata <- readWQPFiles(file_select=FALSE,
+            narrowresult_file = "09_SLCOdata\\01_raw_data\\narrowresult-2019-10-22-spec-chars-filled.csv",
+            sites_file = "09_SLCOdata\\01_raw_data\\sites-2019-10-22.csv",
+            activity_file = "09_SLCOdata\\01_raw_data\\activity-2019-10-22.csv",
+            detquantlim_file = "09_SLCOdata\\01_raw_data\\detquantlim-2019-10-22.csv",
+            orph_check = TRUE)
+objects(slcodata)
+```
+
+## Subset to sites w/ data
+```{r, eval=FALSE}
+slcodata$sites=subset(slcodata$sites, MonitoringLocationIdentifier %in% slcodata$merged_results$MonitoringLocationIdentifier)
+write.csv(slcodata$sites, "09_SLCOdata\\01_raw_data\\sites-2019-10-22.csv", row.names=F)
+```
+
+# Site validation
+
+## Auto site validation & use and assessment unit assignments
+Performs an automated validation of site locations (e.g. appropriate sample location types, waterbody types, jurisdictions etc.). 
+Also performs a spatial join between sites and beneficial use, assessment unit,  watershed managment unit, and UT jurisdiction polygon attributes to sites.
+```{r, eval=F}
+autoValidateWQPsites(
+	sites_object=slcodata$sites,
+	master_site_file="P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\assessment\\09_SLCOdata\\02_site_validation\\master_site_file_08292019_2020IR_final.xlsx",
+	waterbody_type_file = "P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\assessment\\02_site_validation\\waterbody_type_domain_table.csv",
+	)
+```
+
+162 SLCO sites have been validated with the master sites. These sites (and reasons) will be pulled from the master site file produced from the code above, and tacked on to the most recent master site file with all the previously reviewed master sites and their FINAL information
+
+```{r, eval = FALSE}
+old_master_sites = openxlsx::read.xlsx("P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\assessment\\09_SLCOdata\\02_site_validation\\master_site_file_08292019_2020IR_final.xlsx", sheet = "sites")
+old_master_reasons = openxlsx::read.xlsx("P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\assessment\\09_SLCOdata\\02_site_validation\\master_site_file_08292019_2020IR_final.xlsx", sheet = "reasons") 
+
+new_master = openxlsx::loadWorkbook("P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\assessment\\09_SLCOdata\\02_site_validation\\auto_val_master_site_output_plusSLCO_10252019.xlsx")
+all_new_master = openxlsx::readWorkbook(new_master, sheet = "sites")
+all_new_reasons = openxlsx::readWorkbook(new_master, sheet = "reasons")
+
+new_sites = subset(all_new_master, all_new_master$OrganizationIdentifier=="SLCOWS")
+slco_mlids = unique(new_sites$MonitoringLocationIdentifier)
+new_reasons = subset(all_new_reasons, all_new_reasons$MonitoringLocationIdentifier%in%slco_mlids)
+
+all_master_sites = plyr::rbind.fill(old_master_sites, new_sites)
+all_master_reasons = plyr::rbind.fill(old_master_reasons, new_reasons)
+
+require(openxlsx)
+list_of_datasets <- list("sites" = all_master_sites, "reasons" = all_master_reasons)
+write.xlsx(list_of_datasets, file = "P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\assessment\\09_SLCOdata\\02_site_validation\\0_master_site_file_SLCOWS_10252019.xlsx")
+
+```
+
+### Update screening/translation tables
+#### Read initial site review and reject data from auto-rejected sites before updating
+```{r, eval=F}
+slco_auto_val=as.data.frame(readxl::read_excel("P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\assessment\\09_SLCOdata\\02_site_validation\\0_master_site_file_SLCOWS_11132019.xlsx", 'sites'))
+mlids=slco_auto_val$MonitoringLocationIdentifier[slco_auto_val$IR_FLAG!='REJECT']
+update_slco_data=slcodata$merged_results[slcodata$merged_results$MonitoringLocationIdentifier %in% mlids,]
+```
+
+#### Translation workbook path 
+```{r, eval = F}
+translation_wb='ir_translation_workbook_working_v11_ef - no IR_Fraction formula.xlsx'
+```
+
+
+#### Update detection condition / limit name tables
+Because there were no detection condition / limit records, we did not need to update the translation table.
+
+#### Update lab/activity & media tables
+All field data in water, so do not need to update the labortatory or media tables.
+```{r, eval=F}
+unique(update_slco_data$LaboratoryName) # NA
+unique(update_slco_data$ActivityMediaName) # water
+unique(update_slco_data$ActivityMediaSubdivisionName) # NA
+unique(update_slco_data$ActivityTypeCode) # Sample-Routine and Field Msr/Obs: both already in workbook
+```
+
+#### Update parameter translation tables
+11 new combinations were found in the parameter translation table
+```{r, eval=F}
+updateParamTrans(data=update_slco_data, detquantlim=slcodata$detquantlim,  translation_wb=translation_wb, WQPParamCASID_startRow = 4)
+```
+
+#### Next steps
+
+After updating the parameter translation table, we took the SLCO data from the portal and appended it to the rest of the data and ran it through the IR process again to create preliminary assessments with the SLCOWS data included.

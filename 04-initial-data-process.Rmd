@@ -72,6 +72,8 @@ secondaryrev_rejections$ActivityStartDate = as.POSIXct(secondaryrev_rejections$A
 all_record_rejections = plyr::rbind.fill(awqms_rejections, blmmoab_rejections, crazytempphdo_rejections, flowrev_rejections, labactcomment_rejections, secondaryrev_rejections)
 
 save(all_record_rejections, file = "secondary_review_record_rejections.RData")
+
+rm(awqms_rejections, blmmoab_rejections, crazytempphdo_rejections, flowrev_rejections, labactcomment_rejections, secondaryrev_rejections)
 ```
 
 
@@ -83,14 +85,19 @@ load("secondary_review_record_rejections.RData")
 ```{r, secondary-review-rejections}
 resultids_reject = as.character(unique(all_record_rejections$ResultIdentifier))
 
+secondary_review_rejected_records = subset(irdata$merged_results, irdata$merged_results$ResultIdentifier%in%resultids_reject)
+secondary_review_rejected_records$IR_SecondaryReview_FLAG = "REJECT"
+secondary_review_rejected_records$IR_SecondaryReview_COMMENT = "Determined inappropriate for IR assessment due to data concerns contained in Appendix 3 of the IR Assessment Methods"
+
 merged_results = subset(irdata$merged_results, !(irdata$merged_results$ResultIdentifier%in%resultids_reject))
+```
 
-rm(awqms_rejections, blmmoab_rejections, crazytempphdo_rejections, flowrev_rejections, labactcomment_rejections, secondaryrev_rejections)
-
+```{r, echo = FALSE}
 dim(merged_results) # 1351187
 dim(irdata$merged_results) #1362335
 length(resultids_reject)+dim(merged_results)[1]# 1362377
 length(resultids_reject[!(resultids_reject%in%irdata$merged_results$ResultIdentifier)]) #42, likely SLCOWs ResultIdentifiers
+rm(resultids_reject)
 ```
 
 
@@ -120,13 +127,16 @@ rej_data_flag=subset(acc_data, IR_Site_FLAG=='REJECT' | IR_ActMedia_FLAG=='REJEC
 rej_data=plyr::rbind.fill(rej_data, rej_data_flag)
 acc_data=subset(acc_data, IR_Site_FLAG=='ACCEPT' & IR_ActMedia_FLAG=='ACCEPT' & (IR_LabAct_FLAG=='ACCEPT' |  IR_LabAct_FLAG=='REVIEW') & IR_DetCond_FLAG=='ACCEPT')
 
+```
 
+```{r, echo = FALSE}
 rm(rej_data_flag)
 
 # COUNT CHECK
 dim(merged_results)[1]==dim(merged_results_flagged)[1]
 dim(acc_data)[1]+dim(rej_data)[1]==dim(merged_results_flagged)[1]
 ```
+
 
 ### Determine detection conditions and fill NDs
 ```{r, fill-masked}
@@ -152,8 +162,10 @@ any(acc_data$CharacteristicName =='Bis2-Chloroisopropy1Ether')
 unit_rej_data=subset(acc_data, IR_Unit_FLAG!='ACCEPT')
 rej_data=plyr::rbind.fill(rej_data, unit_rej_data)
 acc_data=subset(acc_data, IR_Unit_FLAG=='ACCEPT')
-rm(unit_rej_data)
+```
 
+```{r, echo = FALSE}
+rm(unit_rej_data)
 # COUNT CHECK
 dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1]
 ```
@@ -180,28 +192,29 @@ acc_data=subset(acc_data, IR_Unit_FLAG=='ACCEPT')
 table(is.na(acc_data$CAS))
 
 screened_data=rej_data
-
-# COUNT CHECK
-dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1]
-
 ```
 
 ```{r, echo=F}
-rm(nr,nr_sub,nr_na,irdata,merged_results,slcodata,rej_data)
+# COUNT CHECK
+dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1]
+rm(rej_data)
 ```
 
 ### Assign criteria and track which data do not have criteria
 ```{r, assign-crit}
 memory.limit(size=56000)
-acc_data_criteria=assignCriteria(acc_data, crit_wb='IR_uses_standards_working_v4_ef.xlsx', crit_sheetname='criteria', ss_sheetname='ss_criteria',
+acc_data_criteria=assignCriteria(acc_data, crit_wb='IR_uses_standards_working_v5_eh.xlsx', crit_sheetname='criteria', ss_sheetname='ss_criteria',
   crit_startRow = 3, ss_startRow = 4, rm_nocrit = TRUE, print = TRUE)
 
 acc_data_nocrit = subset(acc_data, !(acc_data$ResultIdentifier%in%acc_data_criteria$ResultIdentifier))
 
+```
+
+```{r, echo=FALSE}
 # COUNT CHECK
 length(unique(acc_data$ResultIdentifier))-length(unique(acc_data_criteria$ResultIdentifier))==length(unique(acc_data_nocrit$ResultIdentifier))
-
 ```
+
 
 ### Update unit conversion table
 ```{r, update-uct, eval=FALSE}
@@ -211,9 +224,36 @@ updateUnitConvTable(acc_data_criteria, translation_wb=translation_wb)
 ### Data prep
 ```{r, data-prep}
 memory.limit(size=56000)
-prepped_data=dataPrep(data=acc_data_criteria, translation_wb=translation_wb, cf_formulas_sheetname="cf_formulas", crit_wb="IR_uses_standards_working_v4_ef.xlsx", startRow_formulas=3)
+prepped_data=dataPrep(data=acc_data_criteria, translation_wb=translation_wb, cf_formulas_sheetname="cf_formulas", crit_wb="IR_uses_standards_working_v5_eh.xlsx", startRow_formulas=3)
 objects(prepped_data)
 ```
 
+```{r, echo = F}
+## CHECK THAT ALL DROPPED RECORDS ARE PROFILE RECORDS ASSESSED ELSEWHERE
+# 126329 profs
+length(unique(acc_data_criteria$ResultIdentifier)) #616899
+length(unique(c(prepped_data$rej_data_reasons$ResultIdentifier, prepped_data$acc_data$ResultIdentifier))) #490570
+616899-490570
+```
 
 
+### Aggregate all rejected records from screening and data prep process
+
+```{r}
+rej_dataprep = prepped_data$rej_data_reasons
+rej_dataprep$IR_DataPrep_FLAG = "REJECT"
+names(rej_dataprep)[names(rej_dataprep)=="reason"]="IR_DataPrep_Comment"
+
+rejected_screening_dataprep = plyr::rbind.fill(screened_data, rej_dataprep, secondary_review_rejected_records, acc_data_nocrit)
+
+```
+
+```{r, echo = FALSE}
+## CHECKS
+irids = length(unique(irdata$merged_results$ResultIdentifier))
+aftids = length(unique(c(rejected_screening_dataprep$ResultIdentifier, prepped_data$acc_data$ResultIdentifier)))
+
+irids - aftids #126329, same number of profile resids removed in dataprep
+
+rm(screened_data, rej_dataprep, acc_data_nocrit, secondary_review_rejected_records)
+```
