@@ -98,6 +98,7 @@ dim(irdata$merged_results) #1362335
 length(resultids_reject)+dim(merged_results)[1]# 1362377
 length(resultids_reject[!(resultids_reject%in%irdata$merged_results$ResultIdentifier)]) #42, likely SLCOWs ResultIdentifiers
 rm(resultids_reject)
+rm(all_record_rejections)
 ```
 
 
@@ -110,8 +111,8 @@ rm(resultids_reject)
 translation_wb='ir_translation_workbook_working_v13_eh - no IR_Fraction formula.xlsx'
 merged_results_flagged=merged_results %>%
 	applyScreenTable(wb=translation_wb, sheetname="masterSiteTable", startRow=1, flag_col_name="IR_Site_FLAG", com_col_name="IR_Site_COMMENT")
-	rej_data=subset(merged_results_flagged, IR_Site_FLAG=='REJECT')
-	acc_data=subset(merged_results_flagged, IR_Site_FLAG=='ACCEPT')
+rej_data=subset(merged_results_flagged, IR_Site_FLAG=='REJECT')
+acc_data=subset(merged_results_flagged, IR_Site_FLAG=='ACCEPT')
 
 (subset(acc_data, MonitoringLocationIdentifier=='UTAHDWQ_WQX-5916570' & CharacteristicName=='Magnesium'))
 
@@ -135,6 +136,7 @@ rm(rej_data_flag)
 # COUNT CHECK
 dim(merged_results)[1]==dim(merged_results_flagged)[1]
 dim(acc_data)[1]+dim(rej_data)[1]==dim(merged_results_flagged)[1]
+rm(merged_results)
 ```
 
 
@@ -187,8 +189,6 @@ table(acc_data$ResultSampleFractionText, acc_data$IR_Fraction, exclude=NULL)
 # dim(rej_data)
 # dim(merged_results)
 
-acc_data=subset(acc_data, IR_Unit_FLAG=='ACCEPT')
-
 table(is.na(acc_data$CAS))
 
 screened_data=rej_data
@@ -223,7 +223,6 @@ updateUnitConvTable(acc_data_criteria, translation_wb=translation_wb)
 
 ### Data prep
 ```{r, data-prep}
-memory.limit(size=56000)
 prepped_data=dataPrep(data=acc_data_criteria, translation_wb=translation_wb, cf_formulas_sheetname="cf_formulas", crit_wb="IR_uses_standards_working_v5_eh.xlsx", startRow_formulas=3)
 objects(prepped_data)
 ```

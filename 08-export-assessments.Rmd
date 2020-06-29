@@ -58,7 +58,7 @@ save(external_asmnts, file = paste0("external_assessments",Sys.Date(),".RData"))
 
 ### Combined assessments
 ```{r}
-load("external_assessments2020-06-27.RData") # remember to change if any changes occur to external assessments
+load("external_assessments_v2.RData") # remember to change if any changes occur to external assessments
 prelim_asmnts=plyr::rbind.fill(prelim_asmnts, external_asmnts)
 prelim_asmnts$pol_ind=ifelse(prelim_asmnts$ParameterGroupName=='POLLUTION INDICATORS' | prelim_asmnts$R3172ParameterName=='Lakes tier II', 'Y', 'N')
 prelim_asmnts$pol_ind[is.na(prelim_asmnts$pol_ind)]='N'
@@ -74,7 +74,7 @@ In the secondary review process, we found an uploading issue with SLCo data subm
 
 
 ```{r}
-load("au_paramter_rejections_slco.RData")
+load("au_parameter_rejections_slco.RData")
 au_param_rej$SLCo_flag = "REJECT"
 asmt_rej_merge = merge(prelim_asmnts, au_param_rej, all.x = TRUE)
 rejected_records_slco_aus = subset(asmt_rej_merge, asmt_rej_merge$SLCo_flag=="REJECT")
@@ -105,8 +105,10 @@ table(prelim_asmnts$lake, exclude=NULL)
 
 #### Permits
 ```{r}
-permits=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/Permits/Current UPDES permits w_WLAs.xlsx", 'permits'))
+# permits=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/Permits/Current UPDES permits w_WLAs.xlsx", 'permits'))
+# save(permits, file = "current_updes_permits.RData")
 
+load("current_updes_permits.RData")
 ut_fac1=wqTools::readECHO_fac(p_st="ut", p_act="y")
 fac_coords1=do.call(rbind.data.frame,ut_fac1$geometry$coordinates)
 names(fac_coords1)=c("dec_long","dec_lat")
@@ -132,7 +134,7 @@ permits_aus=subset(ut_fac, locationID %in% permits$PermitID)
 prelim_asmnts$permit=ifelse(prelim_asmnts$ASSESS_ID %in% permits_aus$ASSESS_ID, 'Y','N')
 table(prelim_asmnts$permit, exclude=NULL)
 
-write.csv(file='ut_facilities.csv', ut_fac, row.names=F)
+write.csv(file=paste0(path,'ut_facilities.csv'), ut_fac, row.names=F)
 ```
 
 #### New listings (AU-parameter scale)
@@ -174,7 +176,7 @@ site_use_param_asmnt=within(site_use_param_asmnt, {
 	AU_review[au_rev==1]='Review needed, low priority'
 })
 table(site_use_param_asmnt$AU_review, exclude=NULL)
-write.csv(file='site_use_param_asmnt_06282020.csv', site_use_param_asmnt, row.names=F)
+write.csv(file=paste0(path,'site_use_param_asmnt_v4.csv'), site_use_param_asmnt, row.names=F)
 ```
 
 #### Secondary review input files
@@ -198,33 +200,16 @@ plyr::d_ply(site_use_param_asmnt, 'Mgmt_Unit',
 #### Export assessments
 ```{r}
 # Rename some objects to make them easier to remember and use
-accepted_data_screened = acc_data
-accepted_data_screened_flattened_criteria = acc_data_criteria
 accepted_data_flattened_criteria_dataprep = prepped_data$acc_data
 data_used_in_assessments_allcolumns = subset(acc_data, acc_data$ResultIdentifier%in%unique(accepted_data_flattened_criteria_dataprep$ResultIdentifier))
-accepted_data = list(accepted_data_screened, accepted_data_screened_flattened_criteria, accepted_data_flattened_criteria_dataprep, data_used_in_assessments_allcolumns)
-
-rejected_data_screened = screened_data
-rejected_data_dataprep_flattened_reasons = prepped_data$rej_data_reasons
-accepted_data_screened_no_criteria = acc_data_nocrit
-rejected_data = list(rejected_data_screened, rejected_data_dataprep_flattened_reasons, accepted_data_screened_no_criteria)
-
-rm(accepted_data_screened, accepted_data_screened, accepted_data_screened_flattened_criteria, accepted_data_flattened_criteria_dataprep, rejected_data_screened, rejected_data_dataprep_flattened_reasons, accepted_data_screened_no_criteria, data_used_in_assessments_allcolumns)
 
 grouping_columns_rollup = group_vars
 lake_assessments = list(lake_tds_assessed,lake_tds_exc,lake_profs_assessed)
 site_specific_tds_assessments = list(ss_mean_tds_assessed, ss_mean_tds_exc)
 toxics_and_conventionals_assessments = list(conventionals_assessed, conventionals_exc, toxics_assessed, toxics_exc)
 
-save(accepted_data, rejected_data, grouping_columns_rollup,lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, prelim_asmnts, file='prelim_asmnts_06272020.Rdata')
+save(rejected_screening_dataprep, accepted_data_flattened_criteria_dataprep, data_used_in_assessments_allcolumns, grouping_columns_rollup,lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, assessed_ecoli, prelim_asmnts, file=paste0(path,'prelim_asmnts_v4.Rdata'))
 ```
-
-#### Write out screened & dataPrep rejected data
-```{r}
-#write.csv(file='screened_data.csv', screened_data)
-#write.csv(file='prep_rej_data.csv', prepped_data$rej_data_reasons)
-```
-
 
 #### Write asmntDashboard_data
 *Currently excluding GSL egg, fish Hg, HFDO, macroinvertebrate, & lake profile data. These can be reviewed in other capacities.*
@@ -269,15 +254,14 @@ criteria=within(criteria, {
 head(subset(criteria, R3172ParameterName=='Total Dissolved Solids'))
 
 criteria=criteria[,!names(criteria) %in% c('ts','acc_chron','els','frac','bu')]
-save(assessed_data, criteria, file='asmntDashboard_data_v4.Rdata')
+save(assessed_data, criteria, file=paste0(path,'asmntDashboard_data_v4.Rdata'))
 ```
 
 #### Reviewer export file
 ```{r}
 compiled_data = composeExport(screened_data = screened_data, prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, include_rejected = FALSE, create_workbooks = FALSE)
-save(compiled_data, file = 'reviewer_export_data_v4.Rdata')
+save(compiled_data, file = paste0(path,'reviewer_export_data_v4.Rdata'))
 ```
-
 
 #### Write assessment Excel file
 ```{r, eval=T}
@@ -290,7 +274,7 @@ writexl::write_xlsx(list(
 						supplement=subset(prepped_data$acc_data, AssessmentType=='All'),
 						ecoli=subset(prepped_data$acc_data, AssessmentType=='Ecoli')
 					),
-		path = 'prelim_asmnts_v4.xlsx', format_headers=F, col_names=T)
+		path = paste0(path,'prelim_asmnts_v4.xlsx'), format_headers=F, col_names=T)
 ```
 
 
@@ -347,12 +331,11 @@ api_create(hardness_dep_crit_plot, filename="hardness-dep-crit")
 
 
 #### Generate merged site & AU assessments
-```{r, eval=T}
-asmnts=read.csv(file="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/site_use_param_asmnt_withSLCO-4Dec2019.csv")
-site_asmnts=irTools::rollUp(list(asmnts), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
+```{r}
+site_asmnts=irTools::rollUp(list(site_use_param_asmnt), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
 names(site_asmnts)[names(site_asmnts)=="AssessCat"]="site_asmnt"
-au_asmnts=irTools::rollUp(list(asmnts), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
+au_asmnts=irTools::rollUp(list(site_use_param_asmnt), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
 names(au_asmnts)[names(au_asmnts)=="AssessCat"]="au_asmnt"
 site_au_asmnts=merge(site_asmnts, au_asmnts, all.x=T)
-write.csv(file="P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/site_au_asmnts_merged.csv", site_au_asmnts, row.names=F)
+write.csv(file=paste0(path, "site_au_asmnts_merged.csv"), site_au_asmnts, row.names=F)
 ```
