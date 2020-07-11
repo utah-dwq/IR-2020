@@ -1,4 +1,4 @@
-# Gather & export preliminary assessments & data
+# Gather & export preliminary assessments & data {#export-asmnts}
 
 ## Gather & bind assessments
 ### Internal assessments
@@ -65,26 +65,6 @@ prelim_asmnts$pol_ind[is.na(prelim_asmnts$pol_ind)]='N'
 any(is.na(prelim_asmnts$IR_Cat))
 ```
 
-#### Removal of AU-parameter scale assessments
-In the secondary review process, we found an uploading issue with SLCo data submitted by DWQ as a cooperator, and SLCo data submitted to the Water Quality Portal. There were discrepancies in the parameters uploaded, but also a range of records with (almost, but not entirely) duplicated values. It was unclear which records were the true records to keep for assessment, so we determined the best way forward is to defer ALL assessments of parameters for which there is SLCo-submitted OR DWQ-submitted data to the next cycle. Below is the step to remove all data associated with this effort.
-```{r, echo = FALSE, eval = FALSE}
-# au_param_rej=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/COMPILED REJECTIONS/AU_param_rejections_SLCo_data_discrepancies_v2.xlsx', 'au-reviews'))
-# save(au_param_rej, file = "au_parameter_rejections_slco.RData")
-```
-
-
-```{r}
-load("au_parameter_rejections_slco.RData")
-au_param_rej$SLCo_flag = "REJECT"
-asmt_rej_merge = merge(prelim_asmnts, au_param_rej, all.x = TRUE)
-rejected_records_slco_aus = subset(asmt_rej_merge, asmt_rej_merge$SLCo_flag=="REJECT")
-
-prelim_asmnts = subset(asmt_rej_merge, is.na(asmt_rej_merge$SLCo_flag))
-prelim_asmnts = prelim_asmnts[,!names(prelim_asmnts)%in%c("SLCo_flag")]
-```
-
-
-## Secondary review input files
 ### Assign review metadata
 #### WMUs
 ```{r}
@@ -103,11 +83,178 @@ prelim_asmnts$lake=ifelse(prelim_asmnts$AU_Type=='Reservoir/Lake' | prelim_asmnt
 table(prelim_asmnts$lake, exclude=NULL)
 ```
 
-#### Permits
+#### Reviewer export file
 ```{r}
+compiled_data = composeExport(prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, create_workbooks = FALSE, include_rejected = FALSE, params = params)
+```
+
+#### Export all site-use-parameter assessments
+```{r}
+# Rename some objects to make them easier to remember and use
+assessed_dat_crit_flat = prepped_data$acc_data
+assessed_dat_allcols = subset(acc_data, acc_data$ResultIdentifier%in%unique(assessed_dat_crit_flat$ResultIdentifier))
+
+lake_assessments = list(lake_tds_assessed,lake_tds_exc,lake_profs_assessed)
+site_specific_tds_assessments = list(ss_mean_tds_assessed, ss_mean_tds_exc)
+toxics_and_conventionals_assessments = list(conventionals_assessed, conventionals_exc, toxics_assessed, toxics_exc)
+
+save(assessed_dat_crit_flat,assessed_dat_allcols,group_vars, lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, prepped_data, assessed_ecoli, prelim_asmnts, compiled_data, file='prelim_asmnts_data_v3.Rdata')
+```
+
+#### Generate 305b and 303d list
+For the 305b list, we need to discern between Fully Supporting and No Evidence of Impairment. We have programmed this functionality into our roll up function in the irTools package, but it requires some additional steps. In this section, we pulled all Fully Supporting AU's from the AU roll up, and then re-rolled up data from those AU's using the "expand uses" input in the R function. If a use contains an "NA" in the AssessCat category, this means that the AU has No Evidence of Impairment, but we did not assess all of its beneficial uses. These AU's are then re-connected to the rest of the assessments.
+```{r, 305b}
+# Remove Pollution Indicators
+pi_recs = subset(prelim_asmnts, prelim_asmnts$ParameterGroupName=="POLLUTION INDICATORS")
+pi_recs$pi = 1
+asmnts_no_pi = merge(prelim_asmnts, pi_recs, all.x=TRUE)
+asmnts_no_pi = subset(asmnts_no_pi, is.na(asmnts_no_pi$pi))
+au_bu = unique(asmnts_no_pi[,c("BEN_CLASS","ASSESS_ID")])
+au_bu = au_bu[!is.na(au_bu$BEN_CLASS),]
+asmnts_no_pi = asmnts_no_pi[,!names(asmnts_no_pi)%in%c("BEN_CLASS")]
+asmnts_no_pi = merge(asmnts_no_pi, au_bu, all.x = TRUE)
+
+# Roll up to overall AU to find FS AU's
+au_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="IR_Cat", expand_uses=F, print=F)
+
+fs_aus = subset(au_asmnts$ASSESS_ID, au_asmnts$AssessCat=="FS")
+fs_prelim = subset(asmnts_no_pi, asmnts_no_pi$ASSESS_ID%in%fs_aus)
+
+# Expand uses for FS cats to find cat 2's
+fs_au_asmnts = irTools::rollUp(list(fs_prelim), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse"), cat_var="IR_Cat", expand_uses=T, print=F)
+
+# Au's with NA's
+nei_aus = subset(fs_au_asmnts, fs_au_asmnts$AssessCat=="NA"|fs_au_asmnts$AssessCat=="IDNE")
+nei_auids = unique(nei_aus$ASSESS_ID)
+
+au_use_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse", "Mgmt_Unit"), cat_var="IR_Cat", expand_uses=T, print=F)
+
+# Combine overall cat and use cats
+names(au_asmnts)[names(au_asmnts)=="AssessCat"] <- "DWQ_AU_Cat"
+names(au_use_asmnts)[names(au_use_asmnts)=="AssessCat"] <- "DWQ_AU_Use_Cat"
+au_use_cats = merge(au_use_asmnts, au_asmnts, all = TRUE)
+
+length(au_use_cats$DWQ_AU_Use_Cat[is.na(au_use_cats$DWQ_AU_Use_Cat)])
+length(au_use_cats$DWQ_AU_Cat[is.na(au_use_cats$DWQ_AU_Cat)])
+# Add DWQ numeric category
+au_use_cats = within(au_use_cats,{
+  DWQ_AU_NumCat = NA
+  DWQ_AU_NumCat[DWQ_AU_Cat=="NS"] = 5
+  DWQ_AU_NumCat[DWQ_AU_Cat=="IDEX"|DWQ_AU_Cat=="IDNE"] = 3
+  DWQ_AU_NumCat[DWQ_AU_Cat=="FS"] = 1
+})
+
+au_use_cats$DWQ_AU_NumCat = ifelse(au_use_cats$ASSESS_ID%in%nei_auids, "2", au_use_cats$DWQ_AU_NumCat)
+
+```
+
+#### Add TMDLs to roll up
+TMDL data from the following file:
+"P:\WQ\Integrated Report\IR_2020\approved_tmdls\Approved_TMDLs_08122019_v3.xlsx"
+```{r, tmdls}
+library(tidyr)
+library(dplyr)
+
+load("tmdls_2020_ir.Rdata")
+tmdls = unique(tmdls[,c("Assessment Unit ID","TMDL ID","TMDL Pollutant")])
+names(tmdls)[names(tmdls)=="Assessment Unit ID"] <- "ASSESS_ID"
+
+tmdls_wide = tmdls%>%pivot_wider(id_cols = c(ASSESS_ID, `TMDL ID`), names_from = `TMDL Pollutant`, values_from = `TMDL Pollutant`)
+
+paste2 <- function(x){
+  y = x[3:length(x)]
+  y = y[!is.na(y)]
+  z = paste(y, collapse=",")
+  return(z)
+}
+
+tmdls_wide$Pollutant = apply(tmdls_wide,1,paste2)
+tmdls_wide = tmdls_wide[,c("ASSESS_ID","TMDL ID","Pollutant")]
+au_mgmt = unique(prelim_asmnts[,c("ASSESS_ID","AU_NAME","Mgmt_Unit")])
+tmdls_wide = merge(tmdls_wide, au_mgmt, all.x = TRUE)
+
+b305 = merge(au_use_cats, tmdls_wide, all = TRUE)
+b305$DWQ_AU_NumCat = ifelse(!is.na(b305$`TMDL ID`)&(b305$DWQ_AU_Cat%in%c("NS","IDEX")),"4A",b305$DWQ_AU_NumCat)
+
+```
+#### 303(d) List
+```{r}
+ns_param_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse", "Mgmt_Unit","R3172ParameterName"), cat_var="IR_Cat", expand_uses=F, print=F)
+au_mgmt = unique(ns_param_asmnts[,c("ASSESS_ID","Mgmt_Unit")])
+
+ns_param_asmnts = subset(ns_param_asmnts, ns_param_asmnts$AssessCat=="NS")
+
+#### HHC
+hhc_ns = subset(prelim_asmnts, prelim_asmnts$TableDescription=="LIST OF HUMAN HEALTH CRITERIA (CONSUMPTION)"&prelim_asmnts$IR_Cat=="NS")
+
+ns_uses_wide = unique(ns_param_asmnts[,c("ASSESS_ID","AU_NAME","BeneficialUse")])
+ns_uses_wide = ns_uses_wide%>%pivot_wider(id_cols = c(ASSESS_ID, AU_NAME), names_from = BeneficialUse, values_from = BeneficialUse)
+
+ns_uses_wide$Impaired_Uses = apply(ns_uses_wide,1,paste2)
+ns_uses_wide = ns_uses_wide[,c("ASSESS_ID","AU_NAME","Impaired_Uses")]
+
+ns_params_wide = unique(ns_param_asmnts[,c("ASSESS_ID","AU_NAME","R3172ParameterName")])
+ns_params_wide = ns_params_wide%>%pivot_wider(id_cols = c(ASSESS_ID, AU_NAME), names_from = R3172ParameterName, values_from = R3172ParameterName)
+
+ns_params_wide$Impaired_Parameter = apply(ns_params_wide,1,paste2)
+ns_params_wide = ns_params_wide[,c("ASSESS_ID","AU_NAME","Impaired_Parameter")]
+
+d303 = merge(ns_uses_wide, ns_params_wide, all= TRUE)
+d303 = merge(d303, au_mgmt, all = TRUE)
+
+writexl::write_xlsx(list("305b" = b305,"303d" = d303, "4as" = tmdls_wide),
+		path = '305b_303d_tmdls_v2.xlsx', format_headers=F, col_names=T)
+```
+
+#### Generate merged site & AU assessments
+Pollution indicators must be removed from roll up to ensure assessment units are assessed appropriately
+
+```{r, eval= F}
+# Site assessments
+site_asmnts=irTools::rollUp(list(asmnts_no_pi), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME", "IR_Lat","IR_Long","Mgmt_Unit"), cat_var="IR_Cat", expand_uses=T, print=F)
+names(site_asmnts)[names(site_asmnts)=="AssessCat"]="site_asmnt"
+# names(site_asmnts)[names(site_asmnts)=="BeneficialUse"]="site_bu"
+
+# AU assessments (no uses)
+au_asmnts=irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="IR_Cat", expand_uses=T, print=F)
+names(au_asmnts)[names(au_asmnts)=="AssessCat"]="au_asmnt"
+# names(au_asmnts)[names(au_asmnts)=="BeneficialUse"]="au_bu"
+site_au_asmnts=merge(site_asmnts, au_asmnts, all=T)
+
+# AU-site-param assessments
+param_asmnts= irTools::rollUp(list(asmnts_no_pi), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME","R3172ParameterName"), cat_var="IR_Cat", expand_uses=F, print=F)
+names(param_asmnts)[names(param_asmnts)=="AssessCat"]="param_asmnt"
+# names(param_asmnts)[names(param_asmnts)=="BeneficialUse"]="param_bu"
+
+# Combine all assessments
+site_au_param_asmnts = merge(site_au_asmnts, param_asmnts, all = TRUE)
+write.csv(file="USE_site_au_param_asmnts_merged.csv", site_au_param_asmnts, row.names=F)
+
+##### AU-site-use-param assessments
+au_use_asmnts=irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse"), cat_var="IR_Cat", expand_uses=T, print=F)
+names(au_asmnts)[names(au_asmnts)=="AssessCat"]="au_asmnt"
+site_au_use_param_asmnts= irTools::rollUp(list(asmnts_no_pi), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME","BeneficialUse","R3172ParameterName"), cat_var="IR_Cat", expand_uses=F, print=F)
+names(site_au_use_param_asmnts)[names(site_au_use_param_asmnts)=="AssessCat"]="param_asmnt"
+
+au_use_site_param_asmts = merge(au_use_asmnts, site_au_use_param_asmnts, all = TRUE)
+write.csv(file="USE_site_au_param_asmnts_merged.csv", au_use_site_param_asmts, row.names=F)
+```
+
+```{r, eval = F}
+# Pollution Indicator Assessments
+pi_asmnts = subset(prelim_asmnts, prelim_asmnts$ParameterGroupName=="POLLUTION INDICATORS")
+pi_au_param_asmnts = irTools::rollUp(list(pi_asmnts), group_vars = c("ASSESS_ID","AU_NAME","R3172ParameterName"), cat_var = "AssessCat", expand_uses = F, print = F)
+```
+
+## Secondary review input files
+#### Permits
+```{r, eval = FALSE, echo = FALSE}
 # permits=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/Permits/Current UPDES permits w_WLAs.xlsx", 'permits'))
 # save(permits, file = "current_updes_permits.RData")
 
+```
+
+```{r, permits}
 load("current_updes_permits.RData")
 ut_fac1=wqTools::readECHO_fac(p_st="ut", p_act="y")
 fac_coords1=do.call(rbind.data.frame,ut_fac1$geometry$coordinates)
@@ -134,7 +281,7 @@ permits_aus=subset(ut_fac, locationID %in% permits$PermitID)
 prelim_asmnts$permit=ifelse(prelim_asmnts$ASSESS_ID %in% permits_aus$ASSESS_ID, 'Y','N')
 table(prelim_asmnts$permit, exclude=NULL)
 
-write.csv(file=paste0(path,'ut_facilities.csv'), ut_fac, row.names=F)
+write.csv(file='ut_facilities.csv', ut_fac, row.names=F)
 ```
 
 #### New listings (AU-parameter scale)
@@ -176,7 +323,7 @@ site_use_param_asmnt=within(site_use_param_asmnt, {
 	AU_review[au_rev==1]='Review needed, low priority'
 })
 table(site_use_param_asmnt$AU_review, exclude=NULL)
-write.csv(file=paste0(path,'site_use_param_asmnt_v4.csv'), site_use_param_asmnt, row.names=F)
+write.csv(file='site_use_param_asmnt_v4.csv', site_use_param_asmnt, row.names=F)
 ```
 
 #### Secondary review input files
@@ -197,23 +344,9 @@ plyr::d_ply(site_use_param_asmnt, 'Mgmt_Unit',
 	), path=paste0('08_secondary_reviews/0_new_secondary_review_files/secondary-review-input-', sdf$Mgmt_Unit[1], '.xlsx'), format_headers=F, col_names=T))
 ```
 
-#### Export assessments
-```{r}
-# Rename some objects to make them easier to remember and use
-accepted_data_flattened_criteria_dataprep = prepped_data$acc_data
-data_used_in_assessments_allcolumns = subset(acc_data, acc_data$ResultIdentifier%in%unique(accepted_data_flattened_criteria_dataprep$ResultIdentifier))
-
-grouping_columns_rollup = group_vars
-lake_assessments = list(lake_tds_assessed,lake_tds_exc,lake_profs_assessed)
-site_specific_tds_assessments = list(ss_mean_tds_assessed, ss_mean_tds_exc)
-toxics_and_conventionals_assessments = list(conventionals_assessed, conventionals_exc, toxics_assessed, toxics_exc)
-
-save(rejected_screening_dataprep, accepted_data_flattened_criteria_dataprep, data_used_in_assessments_allcolumns, grouping_columns_rollup,lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, assessed_ecoli, prelim_asmnts, file=paste0(path,'prelim_asmnts_v4.Rdata'))
-```
-
-#### Write asmntDashboard_data
+### Write asmntDashboard_data
 *Currently excluding GSL egg, fish Hg, HFDO, macroinvertebrate, & lake profile data. These can be reviewed in other capacities.*
-### Plot data
+#### Plot data
 ```{r}
 assessed_data=unique(prepped_data$acc_data[,c("CAS", "ResultIdentifier","ActivityStartDate", "IR_MLID", "IR_MLNAME", "ASSESS_ID", "AU_NAME", 
 									"AU_Type", "BEN_CLASS", "IRParameterName", "R3172ParameterName", "IR_Value", "IR_Unit", "CriterionUnits",
@@ -254,17 +387,11 @@ criteria=within(criteria, {
 head(subset(criteria, R3172ParameterName=='Total Dissolved Solids'))
 
 criteria=criteria[,!names(criteria) %in% c('ts','acc_chron','els','frac','bu')]
-save(assessed_data, criteria, file=paste0(path,'asmntDashboard_data_v4.Rdata'))
-```
-
-#### Reviewer export file
-```{r}
-compiled_data = composeExport(screened_data = screened_data, prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, include_rejected = FALSE, create_workbooks = FALSE)
-save(compiled_data, file = paste0(path,'reviewer_export_data_v4.Rdata'))
+save(assessed_data, criteria, file='asmntDashboard_data_v5.Rdata')
 ```
 
 #### Write assessment Excel file
-```{r, eval=T}
+```{r, eval=TRUE}
 writexl::write_xlsx(list(
 						site_use_param_asmnt=site_use_param_asmnt,
 						prelim_asmnts=prelim_asmnts,
@@ -274,7 +401,7 @@ writexl::write_xlsx(list(
 						supplement=subset(prepped_data$acc_data, AssessmentType=='All'),
 						ecoli=subset(prepped_data$acc_data, AssessmentType=='Ecoli')
 					),
-		path = paste0(path,'prelim_asmnts_v4.xlsx'), format_headers=F, col_names=T)
+		path = 'prelim_asmnts_v4.xlsx', format_headers=F, col_names=T)
 ```
 
 
@@ -328,14 +455,4 @@ hardness_dep_crit_plot=plot_ly(data=plot_data) %>%
 #htmlwidgets::saveWidget(hardness_dep_crit_plot, file='C:/Users/jvander/Documents/R/dwq-R-tools-presentation/figures/hardness_dep_crit.html')
 api_create(hardness_dep_crit_plot, filename="hardness-dep-crit")
 ```
-
-
-#### Generate merged site & AU assessments
-```{r}
-site_asmnts=irTools::rollUp(list(site_use_param_asmnt), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
-names(site_asmnts)[names(site_asmnts)=="AssessCat"]="site_asmnt"
 au_asmnts=irTools::rollUp(list(site_use_param_asmnt), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
-names(au_asmnts)[names(au_asmnts)=="AssessCat"]="au_asmnt"
-site_au_asmnts=merge(site_asmnts, au_asmnts, all.x=T)
-write.csv(file=paste0(path, "site_au_asmnts_merged.csv"), site_au_asmnts, row.names=F)
-```

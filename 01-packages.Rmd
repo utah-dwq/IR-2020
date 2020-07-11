@@ -10,21 +10,9 @@ devtools::install_github("utah-dwq/irTools")
 ```
 
 ## Libraries
-```{r, message=FALSE}
+```{r}
 library(wqTools)
 library(irTools)
 library(magrittr)
-```
-
-## Working directory
-```{r, eval=F}
-setwd('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment')
-```
-
-## Export directory
-**CHANGE TO YOUR OUTPUT DIRECTORY!**
-This is where the files produced by the Integrated Report will end up.
-```{r}
-path = "C:/Users/ehinman/Desktop/sunday_test_2/"
 ```
 

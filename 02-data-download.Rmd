@@ -1,4 +1,5 @@
-# Data download from EPA Water Quality Portal
+# Data download from EPA Water Quality Portal {#data-download}
+
 The majority of assessment data used in the IR are available via the EPA [Water Quality Portal](https://www.waterqualitydata.us/]). Additional data from 
 internal and external data submissions are also included in the assessment. These data were either manually appended to WQP data prior to assessment or 
 assessed separately. The period of record for the 2020 IR includes water years 2011-2018. From the IR Assessment Methods:
@@ -16,7 +17,7 @@ downloadWQP(outfile_path='01_raw_data',start_date='10/01/2010', end_date='09/30/
 ```
 
 ## Identify characters in result value column
-```{r, eval=TRUE}
+```{r, eval=FALSE}
 nr = read.csv("01_raw_data\\narrowresult-2019-08-22.csv", na.strings=c("NA", ""))
 dim(nr)
 nr_sub = subset(nr, !is.na(ResultMeasureValue))

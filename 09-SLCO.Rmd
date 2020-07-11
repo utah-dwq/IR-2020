@@ -1,4 +1,4 @@
-# Salt Lake County Data Download and Run Through irTools
+# Salt Lake County Data Download and Run Through irTools {#slco}
 SLCO submits ample data to DWQ for the Integrated Report. As part of the Call for Data, SLCO intended to submit water quality data to EPA's Water Quality Portal. Due to a series of miscommunications, these data appeared in the WQP after the IR Team's pull of WQ data over the period of record (Oct 1, 2010 - September 30, 2018). Because the WQP has a fluid process for identifying records in the portal at any given time, SLCO data must be pulled separately and run through the assessment steps in isolation. 
 
 **NOTE** Duplicate records exist between the SLCO OrgID and the DWQ Cooperator OrgID. These will need to be sorted out in the secondary review stage.
@@ -76,9 +76,9 @@ slcodata$sites=subset(slcodata$sites, MonitoringLocationIdentifier %in% slcodata
 write.csv(slcodata$sites, "09_SLCOdata\\01_raw_data\\sites-2019-10-22.csv", row.names=F)
 ```
 
-# Site validation
+## Site validation
 
-## Auto site validation & use and assessment unit assignments
+### Auto site validation & use and assessment unit assignments
 Performs an automated validation of site locations (e.g. appropriate sample location types, waterbody types, jurisdictions etc.). 
 Also performs a spatial join between sites and beneficial use, assessment unit,  watershed managment unit, and UT jurisdiction polygon attributes to sites.
 ```{r, eval=F}
@@ -112,8 +112,8 @@ write.xlsx(list_of_datasets, file = "P:\\WQ\\Integrated Report\\IR_2020\\2020-IR
 
 ```
 
-### Update screening/translation tables
-#### Read initial site review and reject data from auto-rejected sites before updating
+## Update screening/translation tables
+### Read initial site review and reject data from auto-rejected sites before updating
 ```{r, eval=F}
 slco_auto_val=as.data.frame(readxl::read_excel("P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\assessment\\09_SLCOdata\\02_site_validation\\0_master_site_file_SLCOWS_11132019.xlsx", 'sites'))
 mlids=slco_auto_val$MonitoringLocationIdentifier[slco_auto_val$IR_FLAG!='REJECT']

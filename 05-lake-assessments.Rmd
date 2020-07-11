@@ -1,16 +1,11 @@
-# Lake assessments
+# Lake assessments {#lake-asmnts}
 Manually side-stepping much of the IR data process for lake profile and trophic assessments.
-
-```{r, include=FALSE}
-knitr::opts_chunk$set(eval=FALSE)
-```
-
 
 ## Profile data
 ### Read data from WQP
 *Note. Querying long term data for visualization and review purposes, but only assessing data within IR POR. For this analysis, limiting data to UTAHDWQ_WQX organization because these samples include the profile measurements required for lake assessments.*
 
-```{r, read-profiles}
+```{r, read-profiles, eval = FALSE}
 profile_params=c('Dissolved oxygen (DO)','Temperature, water','pH', 'Depth, data-logger (ported)')
 profile_data=readWQP(type='narrowresult', siteType='Lake, Reservoir, Impoundment', organization='UTAHDWQ_WQX', characteristicName=profile_params)
 
@@ -25,18 +20,18 @@ all(profile_data$MonitoringLocationIdentifier %in% lake_sites$MonitoringLocation
 ```
 
 ### Check parameter units
-```{r}
+```{r, eval = FALSE}
 knitr::kable(table(profile_data$CharacteristicName, profile_data$ResultMeasure.MeasureUnitCode))
 profile_data=subset(profile_data, !ResultMeasure.MeasureUnitCode %in% c('mg', 'mg/m2'))
 ```
 
 ### Merge spatial info to data
-```{r, lake-merge-spatial}
+```{r, lake-merge-spatial, eval = FALSE}
 profile_data=merge(profile_data, lake_sites, all.x=T)
 ```
 
 ### Reformat & add needed columns
-```{r}
+```{r, eval = FALSE}
 profile_data=within(profile_data, {
 	R3172ParameterName=CharacteristicName
 	R3172ParameterName[R3172ParameterName=='Depth, data-logger (ported)']='Profile depth'
@@ -52,7 +47,7 @@ profile_data=subset(profile_data, !is.na(DataLoggerLine))
 
 
 ## Site map
-```{r}
+```{r, eval = FALSE}
 lake_sites=within(lake_sites, {
 	MonitoringLocationTypeName_wqp=MonitoringLocationTypeName
 	MonitoringLocationTypeName=ifelse(MonitoringLocationIdentifier %in% profile_data$MonitoringLocationIdentifier, 'Profile', 'Other')
@@ -61,7 +56,7 @@ buildMap(sites=lake_sites)
 ```
 
 ### Assign uses to profile data, subset to ALUs
-```{r, lake-assign-uses}
+```{r, lake-assign-uses, eval = FALSE}
 sites_uses=(assignUses(lake_sites, flatten=T))[,c('MonitoringLocationIdentifier','BeneficialUse','R317Descrp','Water_Type','bu_class')]
 names(sites_uses)[names(sites_uses)=='bu_class']='BEN_CLASS'
 profile_data=merge(profile_data, sites_uses, all.x=T)
@@ -69,13 +64,13 @@ profile_data=merge(profile_data, sites_uses, all.x=T)
 
 ### Remove faulty depth profiles
 *Plotting revealed profile events in Jordanelle and Deer Creek reservoirs with depths exceeding 300 m. These are being removed here via AU & date.*
-```{r}
+```{r,eval = FALSE}
 profile_data=subset(profile_data, !(ASSESS_ID=='UT-L-16020203-003_00' & ActivityStartDate==as.Date('2004-07-20')))
 profile_data=subset(profile_data, !(ASSESS_ID=='UT-L-16020203-001_00' & ActivityStartDate==as.Date('2004-07-21')))
 ```
 
 ### Assigning AUs & uses to out-of-state sites (for non-assessment dataset)
-```{r}
+```{r, eval = FALSE}
 man_uses_3A=c('UTAHDWQ_WQX-4906960','UTAHDWQ_WQX-4906980','UTAHDWQ_WQX-5939770','UTAHDWQ_WQX-4938610','UTAHDWQ_WQX-4938620','UTAHDWQ_WQX-4938640','UTAHDWQ_WQX-4938650','UTAHDWQ_WQX-4938680','UTAHDWQ_WQX-4938660','UTAHDWQ_WQX-4938685')
 man_uses_3B=c('UTAHDWQ_WQX-5952430')
 profile_data_asmnt=subset(profile_data, BeneficialUse %in% c("3A","3B") & AU_Type == 'Reservoir/Lake' & as.Date(ActivityStartDate)>as.Date('2010-10-01') & as.Date(ActivityStartDate)<as.Date('2018-09-30'))
@@ -98,7 +93,7 @@ profile_data_all=subset(profile_data_all, BeneficialUse %in% c("3A","3B") & AU_T
 
 
 ### Assign criteria
-```{r, assign-lake-criteria}
+```{r, assign-lake-criteria, eval = FALSE}
 prof_crit=read.csv(file='P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_prof_criteria.csv')
 profile_data_asmnt=merge(profile_data_asmnt, prof_crit, all.x=T)
 profile_data_all=merge(profile_data_all, prof_crit, all.x=T)
@@ -109,7 +104,7 @@ test=subset(profile_data_asmnt, IR_MLID=="UTAHDWQ_WQX-4923810" & ActivityStartDa
 
 ### Run assessments
 *Note - not accounting for Kens Lake site-specific temperature criterion here. Need to check in secondary review.*
-```{r}
+```{r, eval = FALSE}
 table(profile_data_asmnt$R3172ParameterName, exclude=NULL)
 prof_asmnts=assessLakeProfiles(profile_data_asmnt)
 table(prof_asmnts$profile_asmnts_mlid_param$R3172ParameterName, exclude=NULL)
@@ -120,7 +115,7 @@ table(prof_asmnts_all$profile_asmnts_mlid_param$R3172ParameterName, exclude=NULL
 
 ## Trophic data
 ### Read data from WQP
-```{r, read-trophic-data}
+```{r, read-trophic-data, eval = FALSE}
 trophic_params=c('Phosphate-phosphorus','Chlorophyll a', 'Chlorophyll a, uncorrected for pheophytin', 'Chlorophyll a, corrected for pheophytin','Depth, Secchi disk depth')
 trophic_data=readWQP(type='result', siteType='Lake, Reservoir, Impoundment', organization='UTAHDWQ_WQX', characteristicName=trophic_params)
 
@@ -141,13 +136,13 @@ trophic_data=trophic_data[!is.na(trophic_data$ASSESS_ID),]
 ```
 
 ### Check fractions, units, methods
-```{r}
+```{r, eval = FALSE}
 with(trophic_data, {
 	knitr::kable(table(CharacteristicName, ResultSampleFractionText, exclude=NULL))
 })
 ```
 *Remove dissolved phosphorus*
-```{r}
+```{r, eval = FALSE}
 trophic_data=subset(trophic_data, !(CharacteristicName=='Phosphate-phosphorus' & ResultSampleFractionText=='Dissolved'))
 trophic_data=trophic_data[!(trophic_data$CharacteristicName=='Phosphate-phosphorus' & trophic_data$ResultSampleFractionText=='Dissolved'),]
 with(trophic_data, {
@@ -165,19 +160,19 @@ with(trophic_data[trophic_data$CharacteristicName %in% c('Chlorophyll a', 'Chlor
 ```
 
 ### Compare chl-a parameters
-```{r}
+```{r, eval = FALSE}
 boxplot((ResultMeasureValue+0.001)~CharacteristicName, trophic_data[trophic_data$CharacteristicName %in% c('Chlorophyll a', 'Chlorophyll a, uncorrected for pheophytin', 'Chlorophyll a, corrected for pheophytin'),], log='y', ylab='Chlorophyll a (ug/L)', xlab='')
 ```
 
 ### Translate all chl-a parameters to single CharacteristicName
-```{r}
+```{r, eval = FALSE}
 trophic_data=within(trophic_data, {
 	CharacteristicName[CharacteristicName %in% c('Chlorophyll a', 'Chlorophyll a, uncorrected for pheophytin', 'Chlorophyll a, corrected for pheophytin')] = 'Chlorophyll a'
 })
 ```
 
 ### Fill non-detects w/ 1/2 detection, set zero values to 0.001 for TSI/plotting
-```{r}
+```{r, eval = FALSE}
 trophic_data=within(trophic_data, {
 	ResultMeasureValue[which(ResultDetectionConditionText=='Not Detected')] = DetectionQuantitationLimitMeasure.MeasureValue[which(ResultDetectionConditionText=='Not Detected')]/2
 })
@@ -190,7 +185,7 @@ boxplot(TSI~CharacteristicName, trophic_data)
 
 ### Tier 2 assessments
 #### Phytoplankton
-```{r}
+```{r, eval = FALSE}
 phyto_data=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_phytoplankton.xlsx', 'data'))
 phyto_sites=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_phytoplankton.xlsx', 'sites'))
 names(phyto_data)[names(phyto_data) %in% names(phyto_sites)]
@@ -201,7 +196,7 @@ head(phyto_data)
 ```
 
 ##### Calculate cyanobacteria relative abundance
-```{r}
+```{r, eval = FALSE}
 phyto_data_division=reshape2::dcast(data=phyto_data, MonitoringLocationID+MonitoringLocationName+ActivityStartDate+AU_NAME+ASSESS_ID+ResultUnit~BiologicalIndividualID, value.var='ResultValue', fun.aggregate=sum)
 phyto_data_division=within(phyto_data_division, {
 	TotalAbd=Bacillariophyta+Chlorophyta+Chrysophyta+Cryptophyta+Cyanophyta+Dinophyta
@@ -211,7 +206,7 @@ phyto_data_division=within(phyto_data_division, {
 ```
 
 ##### Assess cyanobacteria RA
-```{r}
+```{r, eval = FALSE}
 samp_count=aggregate(CBdom~AU_NAME+ASSESS_ID, data=phyto_data_division, FUN='length')
 names(samp_count)[names(samp_count)=='CBdom']='PhytoSampleCount'
 cbdom_count=aggregate(CBdom~AU_NAME+ASSESS_ID, data=phyto_data_division, FUN='sum')
@@ -226,7 +221,7 @@ cbdom_asmnt=within(cbdom_asmnt, {
 ```
 
 #### Chl a TSI
-```{r}
+```{r, eval = FALSE}
 chla_tsi_data=subset(trophic_data, CharacteristicName =='Chlorophyll a' & as.Date(ActivityStartDate)>as.Date('2010-10-01') & as.Date(ActivityStartDate)<as.Date('2018-09-30'))
 chla_tsi_data=within(chla_tsi_data, {
 	tsi50=ifelse(TSI>50, 1, 0)
@@ -245,7 +240,7 @@ chlaTSIasmnt=within(chlaTSIasmnt,{
 ```
 
 #### Merge tier II assessments
-```{r}
+```{r, eval = FALSE}
 tier2asmnt=merge(chlaTSIasmnt, cbdom_asmnt, all=T)
 with(tier2asmnt, {table(chlaTSIasmnt, CBdomAsmnt)})
 tier2asmnt=within(tier2asmnt, {
@@ -260,7 +255,7 @@ tier2asmnt=subset(tier2asmnt, au_param_Cat2020!='ID')
 ```
 
 ### ID new listings and potential delistings
-```{r}
+```{r, eval = FALSE}
 prev_asmnt=read.csv('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/previous_lake_assessments.csv')
 prev_asmnt_au_param=rollUp(data=list(prev_asmnt), group_vars=c('ASSESS_ID','BeneficialUse','R3172ParameterName'), cat_var='PreviousAssessment', print=F, expand_uses=F)
 names(prev_asmnt_au_param)[names(prev_asmnt_au_param)=='AssessCat']='PrevCat'
@@ -290,13 +285,13 @@ knitr::kable(pot_delist, row.names=F)
 ```
 
 ### Write out assessments
-```{r}
+```{r, eval = FALSE}
 writexl::write_xlsx(list(lake_profile_asmnts=comb_asmnt_au),
 		path = 'P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_profile_asmnts.xlsx', format_headers=F, col_names=T)
 ```
 
 ## Save objects
-```{r}
+```{r, eval = FALSE}
 #save.image('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_assessments.Rdata')
 save(comb_asmnt_au, trophic_data, prof_asmnts_all, phyto_data, file='P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/05_lake_assessments/lake_data_for_app.Rdata')
 ```

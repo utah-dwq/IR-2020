@@ -1,4 +1,4 @@
-# Site validation
+# Site validation {#site-validation}
 
 ## Auto site validation & use and assessment unit assignments
 Performs an automated validation of site locations (e.g. appropriate sample location types, waterbody types, jurisdictions etc.). 

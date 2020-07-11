@@ -1,4 +1,5 @@
-# E.coli assessments
+# E.coli assessments {#ecoli-asmnts}
+
 ## Remove WY2010 Records
 WY2010 is only represented by the month of October, and we do not want to assess the 2010 recreation season in the 2018/2020 IR.
 ```{r}
@@ -19,14 +20,14 @@ new_rec+rej_rec==orig_rec
 
 ```
 
-### Change detection limit values
+## Change detection limit values
 ```{r}
 ecoli_dat_assess$IR_Value = ifelse(ecoli_dat_assess$IR_DetCond=="OD",2420,ecoli_dat_assess$IR_Value)
 ecoli_dat_assess$IR_Value = ifelse(ecoli_dat_assess$IR_DetCond=="ND",1,ecoli_dat_assess$IR_Value)
 
 ```
 
-### E.coli assessment 
+## E.coli assessment 
 ```{r}
 assessed_ecoli = assessEColi(data = ecoli_dat_assess)
 
@@ -39,11 +40,11 @@ assessed_ecoli$non_assessed_data = plyr::rbind.fill(assessed_ecoli$non_assessed_
 ```
 
 ```{r, echo = FALSE}
-length(unique(assessed_ecoli$assessed_data$IR_MLID)) # 951
-length(unique(assessed_ecoli$dailyaggregated_data$IR_MLID)) # 951
-length(unique(assessed_ecoli$ecoli_allscenario_asmnts$IR_MLID)) # 951
-length(unique(assessed_ecoli$ecoli_scenario_rollup$IR_MLID)) # 951
-length(unique(assessed_ecoli$ecoli_mlid_asmnts$IR_MLID)) # 951
+length(unique(assessed_ecoli$assessed_data$IR_MLID)) # 815
+length(unique(assessed_ecoli$dailyaggregated_data$IR_MLID)) # 815
+length(unique(assessed_ecoli$ecoli_allscenario_asmnts$IR_MLID)) # 815
+length(unique(assessed_ecoli$ecoli_scenario_rollup$IR_MLID)) # 815
+length(unique(assessed_ecoli$ecoli_mlid_asmnts$IR_MLID)) # 815
 
 
 mlids = unique(assessed_ecoli$ecoli_scenario_rollup$IR_MLID)
@@ -56,8 +57,8 @@ reversenams = rev(reversenams)
 assessed_ecoli2 = assessed_ecoli[reversenams]
 assessed_ecoli2$raw_data = NULL
 
-# require(openxlsx)
-# write.xlsx(assessed_ecoli2, file = paste0(path,"ecoli_assessed_review_v4.xlsx"))
+require(openxlsx)
+write.xlsx(assessed_ecoli2, file = "ecoli_assessed_review_v4.xlsx")
 rm(mlids, mlids1, reversenams,dropped_mlids, assessed_ecoli2)
 ```
 

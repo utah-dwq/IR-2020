@@ -1,4 +1,4 @@
-# Initial data processing
+# Initial data processing {#init-process}
 
 ## Data validation
 Functions to update & apply data validation tables, generate data with consistent nomenclature.  
@@ -132,10 +132,6 @@ acc_data=subset(acc_data, IR_Site_FLAG=='ACCEPT' & IR_ActMedia_FLAG=='ACCEPT' & 
 
 ```{r, echo = FALSE}
 rm(rej_data_flag)
-
-# COUNT CHECK
-dim(merged_results)[1]==dim(merged_results_flagged)[1]
-dim(acc_data)[1]+dim(rej_data)[1]==dim(merged_results_flagged)[1]
 rm(merged_results)
 ```
 
@@ -147,7 +143,6 @@ acc_data=fillMaskedValues(results=acc_data, detquantlim=irdata$detquantlim, tran
 									   unitConvTable_sheetname="unitConvTable", unitConvTable_startRow=1, unitConvTable_startCol=1,
 									   lql_fac=0.5, uql_fac=1)
 
-dim(acc_data)[1]
 ```
 
 ### Back-fill units for data where unit was NA in data, but existed in detquantlim - add records w/o units in either to rejection dataframe
@@ -164,12 +159,7 @@ any(acc_data$CharacteristicName =='Bis2-Chloroisopropy1Ether')
 unit_rej_data=subset(acc_data, IR_Unit_FLAG!='ACCEPT')
 rej_data=plyr::rbind.fill(rej_data, unit_rej_data)
 acc_data=subset(acc_data, IR_Unit_FLAG=='ACCEPT')
-```
-
-```{r, echo = FALSE}
 rm(unit_rej_data)
-# COUNT CHECK
-dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1]
 ```
 
 ### Apply parameter translation table
@@ -178,7 +168,8 @@ acc_data=applyScreenTable(acc_data, wb=translation_wb, sheetname="paramTransTabl
 table(acc_data$IR_Parameter_FLAG, exclude=NULL)
 ```
 
-### Rejecting data via parameter table, rbind rejected data back to rej_data
+### Rejecting data via parameter table, rbind rejected data to rej_data object
+
 ```{r, rej-param}
 param_rej_data=subset(acc_data, IR_Parameter_FLAG=='REJECT')
 rej_data=plyr::rbind.fill(rej_data, param_rej_data)
@@ -190,31 +181,58 @@ table(acc_data$ResultSampleFractionText, acc_data$IR_Fraction, exclude=NULL)
 # dim(merged_results)
 
 table(is.na(acc_data$CAS))
+```
+
+#### Removal of AU-parameter combinations associated with SLCo data
+In the secondary review process, we found an uploading issue with SLCo data submitted by DWQ as a cooperator, and SLCo data submitted to the Water Quality Portal. There were discrepancies in the parameters uploaded, but also a range of records with (almost, but not entirely) duplicated values. It was unclear which records were the true records to keep for assessment, so we determined the best way forward is to defer ALL assessments of parameters for which there is SLCo-submitted OR DWQ-submitted data to the next cycle. Below is the step to remove all data associated with this effort.
+```{r, echo = FALSE, eval = FALSE}
+# au_param_rej=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/08_secondary_reviews/COMPILED REJECTIONS/AU_param_rejections_SLCo_data_discrepancies_v2.xlsx', 'au-reviews'))
+# save(au_param_rej, file = "au_parameter_rejections_slco.RData")
+```
+
+```{r, remove-slco-asmts}
+load("au_parameter_rejections_slco.RData")
+au_param_rej$SLCo_flag = "REJECT"
+au_param_rej$SLCo_comment = au_param_rej$Comment
+au_param_rej = au_param_rej[,!names(au_param_rej)%in%c("Reviewer","Comment","ReviewDate")]
+
+acc_slco_merge = merge(acc_data, au_param_rej, all.x = TRUE)
+slco_rej_data = subset(acc_slco_merge, acc_slco_merge$SLCo_flag=="REJECT")
+rej_data = plyr::rbind.fill(rej_data, slco_rej_data)
+acc_data = subset(acc_slco_merge, is.na(acc_slco_merge$SLCo_flag))
+acc_data = acc_data[,!names(acc_data)%in%c("SLCo_flag","SLCo_comment", "slco","dwq")]
+
+dim(acc_data)[1]+dim(slco_rej_data)[1]==dim(acc_slco_merge)[1]
 
 screened_data=rej_data
 ```
 
 ```{r, echo=F}
 # COUNT CHECK
-dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1]
+if(!(dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1])){
+  warning("Rejected and accepted records do not match total record count before applying screen tables.")
+}
 rm(rej_data)
 ```
 
 ### Assign criteria and track which data do not have criteria
 ```{r, assign-crit}
 memory.limit(size=56000)
-acc_data_criteria=assignCriteria(acc_data, crit_wb='IR_uses_standards_working_v5_eh.xlsx', crit_sheetname='criteria', ss_sheetname='ss_criteria',
+acc_data_criteria=assignCriteria(acc_data, crit_wb='IR_uses_standards_working_v6_eh.xlsx', crit_sheetname='criteria', ss_sheetname='ss_criteria',
   crit_startRow = 3, ss_startRow = 4, rm_nocrit = TRUE, print = TRUE)
 
 acc_data_nocrit = subset(acc_data, !(acc_data$ResultIdentifier%in%acc_data_criteria$ResultIdentifier))
 
+acc_data_nocrit$IR_Criteria_FLAG = "NOT ASSESSED"
+acc_data_nocrit$IR_Criteria_COMMENT = "No criteria to assess."
 ```
 
 ```{r, echo=FALSE}
-# COUNT CHECK
-length(unique(acc_data$ResultIdentifier))-length(unique(acc_data_criteria$ResultIdentifier))==length(unique(acc_data_nocrit$ResultIdentifier))
-```
+if(!(length(unique(acc_data$ResultIdentifier))-length(unique(acc_data_criteria$ResultIdentifier))==length(unique(acc_data_nocrit$ResultIdentifier)))){
+  warning("Record counts do not match before/after assigning criteria.")
+}
 
+```
 
 ### Update unit conversion table
 ```{r, update-uct, eval=FALSE}
@@ -223,16 +241,16 @@ updateUnitConvTable(acc_data_criteria, translation_wb=translation_wb)
 
 ### Data prep
 ```{r, data-prep}
-prepped_data=dataPrep(data=acc_data_criteria, translation_wb=translation_wb, cf_formulas_sheetname="cf_formulas", crit_wb="IR_uses_standards_working_v5_eh.xlsx", startRow_formulas=3)
+prepped_data=dataPrep(data=acc_data_criteria, translation_wb=translation_wb, cf_formulas_sheetname="cf_formulas", crit_wb="IR_uses_standards_working_v6_eh.xlsx", startRow_formulas=3)
 objects(prepped_data)
 ```
 
 ```{r, echo = F}
 ## CHECK THAT ALL DROPPED RECORDS ARE PROFILE RECORDS ASSESSED ELSEWHERE
 # 126329 profs
-length(unique(acc_data_criteria$ResultIdentifier)) #616899
-length(unique(c(prepped_data$rej_data_reasons$ResultIdentifier, prepped_data$acc_data$ResultIdentifier))) #490570
-616899-490570
+length(unique(acc_data_criteria$ResultIdentifier)) #592766
+length(unique(c(prepped_data$rej_data_reasons$ResultIdentifier, prepped_data$acc_data$ResultIdentifier))) #466437
+
 ```
 
 
@@ -243,16 +261,16 @@ rej_dataprep = prepped_data$rej_data_reasons
 rej_dataprep$IR_DataPrep_FLAG = "REJECT"
 names(rej_dataprep)[names(rej_dataprep)=="reason"]="IR_DataPrep_Comment"
 
-rejected_screening_dataprep = plyr::rbind.fill(screened_data, rej_dataprep, secondary_review_rejected_records, acc_data_nocrit)
+all_rejected_records = plyr::rbind.fill(screened_data, rej_dataprep, secondary_review_rejected_records, acc_data_nocrit)
 
+save(all_rejected_records, screened_data, rej_dataprep, secondary_review_rejected_records, acc_data_nocrit, file = "all_rejected_data_objects.RData")
+rm(screened_data, rej_dataprep, secondary_review_rejected_records, acc_data_nocrit)
 ```
 
 ```{r, echo = FALSE}
 ## CHECKS
 irids = length(unique(irdata$merged_results$ResultIdentifier))
-aftids = length(unique(c(rejected_screening_dataprep$ResultIdentifier, prepped_data$acc_data$ResultIdentifier)))
+aftids = length(unique(c(all_rejected_records$ResultIdentifier, prepped_data$acc_data$ResultIdentifier)))
 
 irids - aftids #126329, same number of profile resids removed in dataprep
-
-rm(screened_data, rej_dataprep, acc_data_nocrit, secondary_review_rejected_records)
 ```
