@@ -147,8 +147,13 @@ au_mgmt = unique(ns_param_asmnts[,c("ASSESS_ID","Mgmt_Unit")])
 
 ns_param_asmnts = subset(ns_param_asmnts, ns_param_asmnts$AssessCat=="NS")
 
-#### HHC
+#### Add HHC to 303d
 hhc_ns = subset(prelim_asmnts, prelim_asmnts$TableDescription=="LIST OF HUMAN HEALTH CRITERIA (CONSUMPTION)"&prelim_asmnts$IR_Cat=="NS")
+hhc_ns = unique(hhc_ns[,c("ASSESS_ID","AU_NAME","BeneficialUse","Mgmt_Unit","R3172ParameterName")])
+hhc_ns$BeneficialUse = paste0("HH",hhc_ns$BeneficialUse)
+hhc_ns$AssessCat = "NS"
+
+ns_param_asmnts = plyr::rbind.fill(ns_param_asmnts, hhc_ns)
 
 ns_uses_wide = unique(ns_param_asmnts[,c("ASSESS_ID","AU_NAME","BeneficialUse")])
 ns_uses_wide = ns_uses_wide%>%pivot_wider(id_cols = c(ASSESS_ID, AU_NAME), names_from = BeneficialUse, values_from = BeneficialUse)
@@ -163,18 +168,23 @@ ns_params_wide$Impaired_Parameter = apply(ns_params_wide,1,paste2)
 ns_params_wide = ns_params_wide[,c("ASSESS_ID","AU_NAME","Impaired_Parameter")]
 
 d303 = merge(ns_uses_wide, ns_params_wide, all= TRUE)
-d303 = merge(d303, au_mgmt, all = TRUE)
+d303 = merge(d303, au_mgmt, all.x = TRUE)
 ```
 
 #### Add Vision Priorities
 ```{r, vision}
 vision = read.csv("P:\\WQ\\Integrated Report\\IR_2020\\attains\\priorities\\UTAHDWQ_priorities_2016.csv")
 
-names(vision) = c("ASSESS_ID","AU_NAME","ATTAINS_PARAM","Catchment_Size")
+names(vision) = c("ASSESS_ID","AU_NAME","ATTAINS_PARAM","Catchment_Size_sqmi")
 params = unique(vision$ATTAINS_PARAM)
 newparm_names = c("Cadmium","E. coli","Minimum Dissolved Oxygen","Zinc","Arsenic","Max. Temperature","Aluminum", "pH")
-translation = data.frame(ATTAINS_PARM = params, R3172ParameterName=newparm_names)
+translation = data.frame(ATTAINS_PARAM = params, R3172ParameterName=newparm_names)
 
+vision = merge(vision, translation, all = TRUE)
+vision$EPA_Priority = "High"
+vision = vision[,!names(vision)%in%"ATTAINS_PARAM"]
+
+d303 = merge(d303, vision, all = TRUE)
 ```
 
 #### New Listings

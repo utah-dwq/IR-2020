@@ -85,7 +85,8 @@ table(prelim_asmnts$lake, exclude=NULL)
 
 #### Reviewer export file
 ```{r}
-compiled_data = composeExport(prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, create_workbooks = FALSE, include_rejected = FALSE, params = params)
+compiled_data = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, create_workbooks = FALSE, include_rejected = FALSE)
+# save(compiled_data, file = "reviewer_export_data.Rdata")
 ```
 
 #### Export all site-use-parameter assessments
@@ -94,9 +95,9 @@ compiled_data = composeExport(prepped_data = prepped_data, toxics_assessed = tox
 assessed_dat_crit_flat = prepped_data$acc_data
 assessed_dat_allcols = subset(acc_data, acc_data$ResultIdentifier%in%unique(assessed_dat_crit_flat$ResultIdentifier))
 
-lake_assessments = list(lake_tds_assessed,lake_tds_exc,lake_profs_assessed)
-site_specific_tds_assessments = list(ss_mean_tds_assessed, ss_mean_tds_exc)
-toxics_and_conventionals_assessments = list(conventionals_assessed, conventionals_exc, toxics_assessed, toxics_exc)
+lake_assessments = list(lake_tds_assessed=lake_tds_assessed,lake_tds_exc=lake_tds_exc,lake_profs_assessed=lake_profs_assessed)
+site_specific_tds_assessments = list(ss_mean_tds_assessed=ss_mean_tds_assessed, ss_mean_tds_exc=ss_mean_tds_exc)
+toxics_and_conventionals_assessments = list(conventionals_assessed=conventionals_assessed, conventionals_exc=conventionals_exc, toxics_assessed=toxics_assessed, toxics_exc=toxics_exc)
 
 save(assessed_dat_crit_flat,assessed_dat_allcols,group_vars, lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, prepped_data, assessed_ecoli, prelim_asmnts, compiled_data, file='prelim_asmnts_data_v3.Rdata')
 ```
@@ -265,7 +266,7 @@ writexl::write_xlsx(list(
 						supplement=subset(prepped_data$acc_data, AssessmentType=='All'),
 						ecoli=subset(prepped_data$acc_data, AssessmentType=='Ecoli')
 					),
-		path = 'prelim_asmnts_v4.xlsx', format_headers=F, col_names=T)
+		path = 'prelim_asmnts_07172020.xlsx', format_headers=F, col_names=T)
 ```
 
 
