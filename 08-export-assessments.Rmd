@@ -56,7 +56,7 @@ external_asmnts=plyr::rbind.fill(gsl_egg_se_assessed, fish_hg_assessed, hfdo_ass
 save(external_asmnts, file = paste0("external_assessments",Sys.Date(),".RData"))
 ```
 
-### Combined assessments
+#### Combined assessments
 ```{r}
 load("external_assessments_v2.RData") # remember to change if any changes occur to external assessments
 prelim_asmnts=plyr::rbind.fill(prelim_asmnts, external_asmnts)
@@ -99,151 +99,6 @@ site_specific_tds_assessments = list(ss_mean_tds_assessed, ss_mean_tds_exc)
 toxics_and_conventionals_assessments = list(conventionals_assessed, conventionals_exc, toxics_assessed, toxics_exc)
 
 save(assessed_dat_crit_flat,assessed_dat_allcols,group_vars, lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, prepped_data, assessed_ecoli, prelim_asmnts, compiled_data, file='prelim_asmnts_data_v3.Rdata')
-```
-
-#### Generate 305b and 303d list
-For the 305b list, we need to discern between Fully Supporting and No Evidence of Impairment. We have programmed this functionality into our roll up function in the irTools package, but it requires some additional steps. In this section, we pulled all Fully Supporting AU's from the AU roll up, and then re-rolled up data from those AU's using the "expand uses" input in the R function. If a use contains an "NA" in the AssessCat category, this means that the AU has No Evidence of Impairment, but we did not assess all of its beneficial uses. These AU's are then re-connected to the rest of the assessments.
-```{r, 305b}
-# Remove Pollution Indicators
-pi_recs = subset(prelim_asmnts, prelim_asmnts$ParameterGroupName=="POLLUTION INDICATORS")
-pi_recs$pi = 1
-asmnts_no_pi = merge(prelim_asmnts, pi_recs, all.x=TRUE)
-asmnts_no_pi = subset(asmnts_no_pi, is.na(asmnts_no_pi$pi))
-au_bu = unique(asmnts_no_pi[,c("BEN_CLASS","ASSESS_ID")])
-au_bu = au_bu[!is.na(au_bu$BEN_CLASS),]
-asmnts_no_pi = asmnts_no_pi[,!names(asmnts_no_pi)%in%c("BEN_CLASS")]
-asmnts_no_pi = merge(asmnts_no_pi, au_bu, all.x = TRUE)
-
-# Roll up to overall AU to find FS AU's
-au_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="IR_Cat", expand_uses=F, print=F)
-
-fs_aus = subset(au_asmnts$ASSESS_ID, au_asmnts$AssessCat=="FS")
-fs_prelim = subset(asmnts_no_pi, asmnts_no_pi$ASSESS_ID%in%fs_aus)
-
-# Expand uses for FS cats to find cat 2's
-fs_au_asmnts = irTools::rollUp(list(fs_prelim), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse"), cat_var="IR_Cat", expand_uses=T, print=F)
-
-# Au's with NA's
-nei_aus = subset(fs_au_asmnts, fs_au_asmnts$AssessCat=="NA"|fs_au_asmnts$AssessCat=="IDNE")
-nei_auids = unique(nei_aus$ASSESS_ID)
-
-au_use_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse", "Mgmt_Unit"), cat_var="IR_Cat", expand_uses=T, print=F)
-
-# Combine overall cat and use cats
-names(au_asmnts)[names(au_asmnts)=="AssessCat"] <- "DWQ_AU_Cat"
-names(au_use_asmnts)[names(au_use_asmnts)=="AssessCat"] <- "DWQ_AU_Use_Cat"
-au_use_cats = merge(au_use_asmnts, au_asmnts, all = TRUE)
-
-length(au_use_cats$DWQ_AU_Use_Cat[is.na(au_use_cats$DWQ_AU_Use_Cat)])
-length(au_use_cats$DWQ_AU_Cat[is.na(au_use_cats$DWQ_AU_Cat)])
-# Add DWQ numeric category
-au_use_cats = within(au_use_cats,{
-  DWQ_AU_NumCat = NA
-  DWQ_AU_NumCat[DWQ_AU_Cat=="NS"] = 5
-  DWQ_AU_NumCat[DWQ_AU_Cat=="IDEX"|DWQ_AU_Cat=="IDNE"] = 3
-  DWQ_AU_NumCat[DWQ_AU_Cat=="FS"] = 1
-})
-
-au_use_cats$DWQ_AU_NumCat = ifelse(au_use_cats$ASSESS_ID%in%nei_auids, "2", au_use_cats$DWQ_AU_NumCat)
-
-```
-
-#### Add TMDLs to roll up
-TMDL data from the following file:
-"P:\WQ\Integrated Report\IR_2020\approved_tmdls\Approved_TMDLs_08122019_v3.xlsx"
-```{r, tmdls}
-library(tidyr)
-library(dplyr)
-
-load("tmdls_2020_ir.Rdata")
-tmdls = unique(tmdls[,c("Assessment Unit ID","TMDL ID","TMDL Pollutant")])
-names(tmdls)[names(tmdls)=="Assessment Unit ID"] <- "ASSESS_ID"
-
-tmdls_wide = tmdls%>%pivot_wider(id_cols = c(ASSESS_ID, `TMDL ID`), names_from = `TMDL Pollutant`, values_from = `TMDL Pollutant`)
-
-paste2 <- function(x){
-  y = x[3:length(x)]
-  y = y[!is.na(y)]
-  z = paste(y, collapse=",")
-  return(z)
-}
-
-tmdls_wide$Pollutant = apply(tmdls_wide,1,paste2)
-tmdls_wide = tmdls_wide[,c("ASSESS_ID","TMDL ID","Pollutant")]
-au_mgmt = unique(prelim_asmnts[,c("ASSESS_ID","AU_NAME","Mgmt_Unit")])
-tmdls_wide = merge(tmdls_wide, au_mgmt, all.x = TRUE)
-
-b305 = merge(au_use_cats, tmdls_wide, all = TRUE)
-b305$DWQ_AU_NumCat = ifelse(!is.na(b305$`TMDL ID`)&(b305$DWQ_AU_Cat%in%c("NS","IDEX")),"4A",b305$DWQ_AU_NumCat)
-
-```
-#### 303(d) List
-```{r}
-ns_param_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse", "Mgmt_Unit","R3172ParameterName"), cat_var="IR_Cat", expand_uses=F, print=F)
-au_mgmt = unique(ns_param_asmnts[,c("ASSESS_ID","Mgmt_Unit")])
-
-ns_param_asmnts = subset(ns_param_asmnts, ns_param_asmnts$AssessCat=="NS")
-
-#### HHC
-hhc_ns = subset(prelim_asmnts, prelim_asmnts$TableDescription=="LIST OF HUMAN HEALTH CRITERIA (CONSUMPTION)"&prelim_asmnts$IR_Cat=="NS")
-
-ns_uses_wide = unique(ns_param_asmnts[,c("ASSESS_ID","AU_NAME","BeneficialUse")])
-ns_uses_wide = ns_uses_wide%>%pivot_wider(id_cols = c(ASSESS_ID, AU_NAME), names_from = BeneficialUse, values_from = BeneficialUse)
-
-ns_uses_wide$Impaired_Uses = apply(ns_uses_wide,1,paste2)
-ns_uses_wide = ns_uses_wide[,c("ASSESS_ID","AU_NAME","Impaired_Uses")]
-
-ns_params_wide = unique(ns_param_asmnts[,c("ASSESS_ID","AU_NAME","R3172ParameterName")])
-ns_params_wide = ns_params_wide%>%pivot_wider(id_cols = c(ASSESS_ID, AU_NAME), names_from = R3172ParameterName, values_from = R3172ParameterName)
-
-ns_params_wide$Impaired_Parameter = apply(ns_params_wide,1,paste2)
-ns_params_wide = ns_params_wide[,c("ASSESS_ID","AU_NAME","Impaired_Parameter")]
-
-d303 = merge(ns_uses_wide, ns_params_wide, all= TRUE)
-d303 = merge(d303, au_mgmt, all = TRUE)
-
-writexl::write_xlsx(list("305b" = b305,"303d" = d303, "4as" = tmdls_wide),
-		path = '305b_303d_tmdls_v2.xlsx', format_headers=F, col_names=T)
-```
-
-#### Generate merged site & AU assessments
-Pollution indicators must be removed from roll up to ensure assessment units are assessed appropriately
-
-```{r, eval= F}
-# Site assessments
-site_asmnts=irTools::rollUp(list(asmnts_no_pi), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME", "IR_Lat","IR_Long","Mgmt_Unit"), cat_var="IR_Cat", expand_uses=T, print=F)
-names(site_asmnts)[names(site_asmnts)=="AssessCat"]="site_asmnt"
-# names(site_asmnts)[names(site_asmnts)=="BeneficialUse"]="site_bu"
-
-# AU assessments (no uses)
-au_asmnts=irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="IR_Cat", expand_uses=T, print=F)
-names(au_asmnts)[names(au_asmnts)=="AssessCat"]="au_asmnt"
-# names(au_asmnts)[names(au_asmnts)=="BeneficialUse"]="au_bu"
-site_au_asmnts=merge(site_asmnts, au_asmnts, all=T)
-
-# AU-site-param assessments
-param_asmnts= irTools::rollUp(list(asmnts_no_pi), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME","R3172ParameterName"), cat_var="IR_Cat", expand_uses=F, print=F)
-names(param_asmnts)[names(param_asmnts)=="AssessCat"]="param_asmnt"
-# names(param_asmnts)[names(param_asmnts)=="BeneficialUse"]="param_bu"
-
-# Combine all assessments
-site_au_param_asmnts = merge(site_au_asmnts, param_asmnts, all = TRUE)
-write.csv(file="USE_site_au_param_asmnts_merged.csv", site_au_param_asmnts, row.names=F)
-
-##### AU-site-use-param assessments
-au_use_asmnts=irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse"), cat_var="IR_Cat", expand_uses=T, print=F)
-names(au_asmnts)[names(au_asmnts)=="AssessCat"]="au_asmnt"
-site_au_use_param_asmnts= irTools::rollUp(list(asmnts_no_pi), group_vars=c("IR_MLID","IR_MLNAME","ASSESS_ID","AU_NAME","BeneficialUse","R3172ParameterName"), cat_var="IR_Cat", expand_uses=F, print=F)
-names(site_au_use_param_asmnts)[names(site_au_use_param_asmnts)=="AssessCat"]="param_asmnt"
-
-au_use_site_param_asmts = merge(au_use_asmnts, site_au_use_param_asmnts, all = TRUE)
-write.csv(file="USE_site_au_param_asmnts_merged.csv", au_use_site_param_asmts, row.names=F)
-```
-
-```{r, eval = F}
-# Pollution Indicator Assessments
-pi_asmnts = subset(prelim_asmnts, prelim_asmnts$ParameterGroupName=="POLLUTION INDICATORS")
-pi_au_param_asmnts = irTools::rollUp(list(pi_asmnts), group_vars = c("ASSESS_ID","AU_NAME","R3172ParameterName"), cat_var = "AssessCat", expand_uses = F, print = F)
 ```
 
 ## Secondary review input files
@@ -328,11 +183,11 @@ write.csv(file='site_use_param_asmnt_v4.csv', site_use_param_asmnt, row.names=F)
 
 #### Secondary review input files
 ```{r, eval = F}
-au_splits=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-splits'))
-au_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'au-reviews'))
-site_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'site-reviews'))
-record_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'record-reviews'))
-sw_reviews=as.data.frame(readxl::read_excel('08_secondary_reviews/site-use-param-asmnt-blank.xlsx', 'sw-reviews'))
+au_splits=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', 'au-splits'))
+au_reviews=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', 'au-reviews'))
+site_reviews=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', 'site-reviews'))
+record_reviews=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', 'record-reviews'))
+sw_reviews=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', 'sw-reviews'))
 plyr::d_ply(site_use_param_asmnt, 'Mgmt_Unit',
 	function(sdf) writexl::write_xlsx(list(
 										`site-use-param-asmnt`=sdf, 
@@ -341,7 +196,16 @@ plyr::d_ply(site_use_param_asmnt, 'Mgmt_Unit',
 										`site-reviews`=site_reviews,
 										`sw-reviews`=sw_reviews,
 										`record-reviews`=record_reviews
-	), path=paste0('08_secondary_reviews/0_new_secondary_review_files/secondary-review-input-', sdf$Mgmt_Unit[1], '.xlsx'), format_headers=F, col_names=T))
+	), path=paste0('secondary-review-input-', sdf$Mgmt_Unit[1], '.xlsx'), format_headers=F, col_names=T))
+
+writexl::write_xlsx(list(
+										`site-use-param-asmnt`=site_use_param_asmnt, 
+										`au-splits`=au_splits,
+										`au-reviews`=au_reviews,
+										`site-reviews`=site_reviews,
+										`sw-reviews`=sw_reviews,
+										`record-reviews`=record_reviews
+	), path=paste0('secondary-review-input-all.xlsx'), format_headers=F, col_names=T)
 ```
 
 ### Write asmntDashboard_data
@@ -455,4 +319,3 @@ hardness_dep_crit_plot=plot_ly(data=plot_data) %>%
 #htmlwidgets::saveWidget(hardness_dep_crit_plot, file='C:/Users/jvander/Documents/R/dwq-R-tools-presentation/figures/hardness_dep_crit.html')
 api_create(hardness_dep_crit_plot, filename="hardness-dep-crit")
 ```
-au_asmnts=irTools::rollUp(list(site_use_param_asmnt), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="AssessCat", expand_uses=F, print=F)
