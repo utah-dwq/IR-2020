@@ -29,7 +29,7 @@ ecoli_dat_assess$IR_Value = ifelse(ecoli_dat_assess$IR_DetCond=="ND",1,ecoli_dat
 
 ## E.coli assessment 
 ```{r}
-assessed_ecoli = assessEColi(data = ecoli_dat_assess)
+assessed_ecoli = assessEColi(data = ecoli_dat_assess, max_exc_pct = 10)
 
 assessed_ecoli$non_assessed_data$ActivityStartDate = as.character(assessed_ecoli$non_assessed_data$ActivityStartDate)
 

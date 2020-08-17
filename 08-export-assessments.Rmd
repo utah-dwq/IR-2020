@@ -13,6 +13,8 @@ lake_profs_assessed=within(lake_profs_assessed, {
 	R3172ParameterName[R3172ParameterName=='Temperature, water']='Max. Temperature'
 })
 prelim_asmnts=plyr::rbind.fill(conventionals_assessed,lake_tds_assessed,ss_mean_tds_assessed,toxics_assessed, assessed_ecoli$ecoli_mlid_asmnts,lake_profs_assessed[,!names(lake_profs_assessed) %in% c('PrevCat','au_param_Cat2020','pot_delist','new_listing')])
+
+# prelim_asmnts=plyr::rbind.fill(toxics_and_conventionals_assessments$conventionals_assessed, toxics_and_conventionals_assessments$toxics_assessed,lake_assessments$lake_tds_assessed, site_specific_tds_assessments$ss_mean_tds_assessed,assessed_ecoli$ecoli_mlid_asmnts,lake_profs_assessed[,!names(lake_profs_assessed) %in% c('PrevCat','au_param_Cat2020','pot_delist','new_listing')])
 ```
 
 ### One parameter-site rejection from secondary review
@@ -52,13 +54,54 @@ snowbird_assessed=within(snowbird_assessed, {
 	IR_Lat=wqTools::facToNum(IR_Lat)
 	IR_Long=wqTools::facToNum(IR_Long)
 })
-external_asmnts=plyr::rbind.fill(gsl_egg_se_assessed, fish_hg_assessed, hfdo_assessed, ecoli_adv_assessed, snowbird_assessed)
-save(external_asmnts, file = paste0("external_assessments",Sys.Date(),".RData"))
+snowbird_assessed = snowbird_assessed[,!names(snowbird_assessed)%in%c("Mgmt_Unit")]
+bugs_assessed=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/macroinvertebrates/1_draftanalysis_macroinvert_oeassessment_AssessNotes_v4_ef.xlsx", '18-20 final assessments'))
+bugs_assessed = bugs_assessed[,c("ASSESS_ID","OriginalAssessCat","IR Note1","2016AssessCat","Category to Report")]
+names(bugs_assessed) = c("ASSESS_ID","OrigAssessCat_Bugs","EF_KF_BH_Note_Bugs","2016AssessCat_Bugs","IR_Cat")
+bugs_assessed = subset(bugs_assessed, !bugs_assessed$ASSESS_ID=="(blank)")
+bugs_assessed$R3172ParameterName = "Macroinvertebrates"
+# Get bug beneficial uses
+bugs_latlong=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/macroinvertebrates/1_draftanalysis_macroinvert_oeassessment_AssessNotes_v4_ef.xlsx", '18-20 data assessments'))
+bugs_latlong = unique(bugs_latlong[!is.na(bugs_latlong$DD_LAT_Y),c("DD_LAT_Y","DD_LONG_X")])
+au_info = wqTools::assignAUs(bugs_latlong, lat = "DD_LAT_Y", long = "DD_LONG_X")
+au_bu_info = wqTools::assignUses(au_info, lat = "DD_LAT_Y", long = "DD_LONG_X")
+au_bu_wmu_info = wqTools::assignPolys("wmu_poly", columns = c("Mgmt_Unit"), au_bu_info, lat = "DD_LAT_Y", long = "DD_LONG_X")
+au_bu_wmu_info = unique(au_bu_wmu_info[!is.na(au_bu_wmu_info$ASSESS_ID),c("ASSESS_ID","AU_NAME","Water_Type","BeneficialUse","Mgmt_Unit")])
+bugs_assessed = merge(bugs_assessed, au_bu_wmu_info, all.x = TRUE)
+bugs_assessed = subset(bugs_assessed, !bugs_assessed$ASSESS_ID%in%c("undefined"))
+names(bugs_assessed)[names(bugs_assessed)=="BeneficialUse"] = "BEN_CLASS"
+names(bugs_assessed)[names(bugs_assessed)=="Water_Type"] = "AU_Type"
+bugs_assessed$BeneficialUse = gsub("1C,|2A,|2B,|4","",bugs_assessed$BEN_CLASS)
+bugs_assessed$BeneficialUse = gsub(",$","",bugs_assessed$BeneficialUse)
+bugs_assd_flat = tidyr::separate(data = bugs_assessed, col = BeneficialUse, into = c("BenUse1", "BenUse2"), sep = ",")
+bugs_assd_flat = tidyr::pivot_longer(bugs_assd_flat, cols = c("BenUse1","BenUse2"), values_to = "BeneficialUse")
+bugs_assd_flat = bugs_assd_flat[!is.na(bugs_assd_flat$BeneficialUse),!names(bugs_assd_flat)%in%c("name")]
+bugs_assd_flat$IR_MLID = paste0(bugs_assd_flat$AU_NAME,"-Bugs")
+bugs_assd_flat$IR_MLNAME = paste0(bugs_assd_flat$AU_NAME,"-Bugs")
+
+habs_assessed = as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/hab/3_draft_habassessment_v1_kf.xlsx", "rolledUp_AU"))
+au_bu_wmu = unique(acc_data_criteria[!is.na(acc_data_criteria$BEN_CLASS),c("ASSESS_ID","BEN_CLASS","Mgmt_Unit","AU_Type")])
+habs_assessed = merge(habs_assessed, au_bu_wmu, all.x = TRUE)
+habs_assessed$BEN_CLASS[habs_assessed$AU_NAME=="Upper Kents Lake"] = "2B,3A,4"
+habs_assessed$Mgmt_Unit[habs_assessed$AU_NAME=="Upper Kents Lake"] = "Cedar-Beaver"
+habs_assessed$AU_Type[habs_assessed$AU_NAME=="Upper Kents Lake"] = "Reservoir/Lake"
+habs_assessed$BEN_CLASS[habs_assessed$AU_NAME=="Dry Gulch Creek"] = "1C,2B,3E,4"
+habs_assessed$Mgmt_Unit[habs_assessed$AU_NAME=="Dry Gulch Creek"] = "Uinta Basin"
+habs_assessed$AU_Type[habs_assessed$AU_NAME=="Dry Gulch Creek"] = "River/Stream"
+habs_assessed$IR_MLID = paste0(habs_assessed$AU_NAME,"-HABs")
+habs_assessed$IR_MLNAME = paste0(habs_assessed$AU_NAME,"-HABs")
+habs_assessed$BeneficialUse = "2A"
+habs_assessed$BeneficialUse = ifelse(grepl("2B", habs_assessed$BEN_CLASS),"2B","2A")
+names(habs_assessed)[names(habs_assessed)=='AssessCat']='IR_Cat'
+
+
+external_asmnts=plyr::rbind.fill(gsl_egg_se_assessed, fish_hg_assessed, hfdo_assessed, ecoli_adv_assessed, snowbird_assessed, bugs_assd_flat, habs_assessed)
+save(external_asmnts, file = "external_assessments_v4.RData") # latest version: Aug 2, 2020
 ```
 
 #### Combined assessments
 ```{r}
-load("external_assessments_v2.RData") # remember to change if any changes occur to external assessments
+load("external_assessments_v4.RData") # remember to change if any changes occur to external assessments
 prelim_asmnts=plyr::rbind.fill(prelim_asmnts, external_asmnts)
 prelim_asmnts$pol_ind=ifelse(prelim_asmnts$ParameterGroupName=='POLLUTION INDICATORS' | prelim_asmnts$R3172ParameterName=='Lakes tier II', 'Y', 'N')
 prelim_asmnts$pol_ind[is.na(prelim_asmnts$pol_ind)]='N'
@@ -68,10 +111,13 @@ any(is.na(prelim_asmnts$IR_Cat))
 ### Assign review metadata
 #### WMUs
 ```{r}
-prelim_asmnts = prelim_asmnts[,!names(prelim_asmnts)%in%c("Mgmt_Unit","AU_Type")]
+prelim_asmnts_wmus = subset(prelim_asmnts, !is.na(prelim_asmnts$Mgmt_Unit))
+prelim_asmnts_nowmus = subset(prelim_asmnts, is.na(prelim_asmnts$Mgmt_Unit))
+prelim_asmnts_nowmus = prelim_asmnts_nowmus[,!names(prelim_asmnts_nowmus)%in%c("Mgmt_Unit","AU_Type")]
 wmus=unique(acc_data_criteria[,c('ASSESS_ID','AU_Type','Mgmt_Unit')])
 dim(prelim_asmnts)
-prelim_asmnts=merge(prelim_asmnts, wmus, all.x=T)
+prelim_asmnts_nowmus=merge(prelim_asmnts_nowmus, wmus, all.x=T)
+prelim_asmnts=plyr::rbind.fill(prelim_asmnts_wmus, prelim_asmnts_nowmus)
 dim(prelim_asmnts)
 prelim_asmnts$Mgmt_Unit[prelim_asmnts$BeneficialUse=='5A']='Great Salt Lake'
 any(is.na(prelim_asmnts$Mgmt_Unit))
@@ -86,7 +132,7 @@ table(prelim_asmnts$lake, exclude=NULL)
 #### Reviewer export file
 ```{r}
 compiled_data = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, create_workbooks = FALSE, include_rejected = FALSE)
-# save(compiled_data, file = "reviewer_export_data.Rdata")
+save(compiled_data, file = "reviewer_export_data.Rdata")
 ```
 
 #### Export all site-use-parameter assessments
@@ -99,7 +145,7 @@ lake_assessments = list(lake_tds_assessed=lake_tds_assessed,lake_tds_exc=lake_td
 site_specific_tds_assessments = list(ss_mean_tds_assessed=ss_mean_tds_assessed, ss_mean_tds_exc=ss_mean_tds_exc)
 toxics_and_conventionals_assessments = list(conventionals_assessed=conventionals_assessed, conventionals_exc=conventionals_exc, toxics_assessed=toxics_assessed, toxics_exc=toxics_exc)
 
-save(assessed_dat_crit_flat,assessed_dat_allcols,group_vars, lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, prepped_data, assessed_ecoli, prelim_asmnts, compiled_data, file='prelim_asmnts_data_v3.Rdata')
+save(acc_data_criteria, assessed_dat_crit_flat,assessed_dat_allcols,group_vars, lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, prepped_data, assessed_ecoli, prelim_asmnts, compiled_data, file='prelim_asmnts_data.Rdata')
 ```
 
 ## Secondary review input files
@@ -179,7 +225,7 @@ site_use_param_asmnt=within(site_use_param_asmnt, {
 	AU_review[au_rev==1]='Review needed, low priority'
 })
 table(site_use_param_asmnt$AU_review, exclude=NULL)
-write.csv(file='site_use_param_asmnt_v4.csv', site_use_param_asmnt, row.names=F)
+write.csv(file='site_use_param_asmnt.csv', site_use_param_asmnt, row.names=F)
 ```
 
 #### Secondary review input files
@@ -189,15 +235,15 @@ au_reviews=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', '
 site_reviews=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', 'site-reviews'))
 record_reviews=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', 'record-reviews'))
 sw_reviews=as.data.frame(readxl::read_excel('site-use-param-asmnt-blank.xlsx', 'sw-reviews'))
-plyr::d_ply(site_use_param_asmnt, 'Mgmt_Unit',
-	function(sdf) writexl::write_xlsx(list(
-										`site-use-param-asmnt`=sdf, 
-										`au-splits`=au_splits,
-										`au-reviews`=au_reviews,
-										`site-reviews`=site_reviews,
-										`sw-reviews`=sw_reviews,
-										`record-reviews`=record_reviews
-	), path=paste0('secondary-review-input-', sdf$Mgmt_Unit[1], '.xlsx'), format_headers=F, col_names=T))
+# plyr::d_ply(site_use_param_asmnt, 'Mgmt_Unit',
+# 	function(sdf) writexl::write_xlsx(list(
+# 										`site-use-param-asmnt`=sdf, 
+# 										`au-splits`=au_splits,
+# 										`au-reviews`=au_reviews,
+# 										`site-reviews`=site_reviews,
+# 										`sw-reviews`=sw_reviews,
+# 										`record-reviews`=record_reviews
+# 	), path=paste0('secondary-review-input-', sdf$Mgmt_Unit[1], '.xlsx'), format_headers=F, col_names=T))
 
 writexl::write_xlsx(list(
 										`site-use-param-asmnt`=site_use_param_asmnt, 
@@ -252,7 +298,7 @@ criteria=within(criteria, {
 head(subset(criteria, R3172ParameterName=='Total Dissolved Solids'))
 
 criteria=criteria[,!names(criteria) %in% c('ts','acc_chron','els','frac','bu')]
-save(assessed_data, criteria, file='asmntDashboard_data_v5.Rdata')
+save(assessed_data, criteria, file='asmntDashboard_data.Rdata')
 ```
 
 #### Write assessment Excel file
@@ -266,7 +312,7 @@ writexl::write_xlsx(list(
 						supplement=subset(prepped_data$acc_data, AssessmentType=='All'),
 						ecoli=subset(prepped_data$acc_data, AssessmentType=='Ecoli')
 					),
-		path = 'prelim_asmnts_07172020.xlsx', format_headers=F, col_names=T)
+		path = 'prelim_asmnts.xlsx', format_headers=F, col_names=T)
 ```
 
 
