@@ -58,7 +58,7 @@ assessed_ecoli2 = assessed_ecoli[reversenams]
 assessed_ecoli2$raw_data = NULL
 
 require(openxlsx)
-write.xlsx(assessed_ecoli2, file = "ecoli_assessed_review_v4.xlsx")
+write.xlsx(assessed_ecoli2, file = "ecoli_assessed_review.xlsx")
 rm(mlids, mlids1, reversenams,dropped_mlids, assessed_ecoli2)
 ```
 

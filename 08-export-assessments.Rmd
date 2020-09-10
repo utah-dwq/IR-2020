@@ -26,19 +26,27 @@ prelim_asmnts = subset(prelim_asmnts, is.na(prelim_asmnts$Remove))
 prelim_asmnts = prelim_asmnts[,!names(prelim_asmnts)%in%c("Remove")]
 ```
 
-
 ### External assessments
 This section adds the Great Salt Lake egg selenium, fish tissue mercury, high frequency dissolved oxygen, Snowbird, and E.coli advisory and sampling assessments. Note that per our meeting with Nick von Stackelberg on dissolved oxygen holding capacity in high elevation waters, we are only assessing the 30-day average this cycle for the high frequency assessment.
 
 Additionally, the Snowbird assessments occur at sites that are not included within the master site file because they did not come through the WQP.
+
+External assessments occurring at the site-scale have their AU's re-assigned to take into account any resegmentation differences following secondary review. AU-scale external assessments affected by resegmentation need these edits made in the workbook rather than in the code.
 ```{r, eval = F}
+# Great Salt Lake Egg Selenium
 gsl_egg_se_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/gsl_egg_se/gsl_egg_se_assessment.xlsx', 'asmnt'))
 names(gsl_egg_se_assessed)[names(gsl_egg_se_assessed)=='AssessCat']='IR_Cat'
+
+# Fish Tissue Mercury
 fish_hg_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/fish_tissue/3_draft_fishtissue_hgassessment_v2_ef.xlsx', 'asmnt'))
 fish_hg_assessed=fish_hg_assessed[,!names(fish_hg_assessed) %in% 'Category to Report']
 names(fish_hg_assessed)[names(fish_hg_assessed)=='AssessCat']='IR_Cat'
+
+# High Frequency DO
 hfdo_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/hfdo/hfdo_assessed_review.xlsx', 'HFDO_asmnts'))
 hfdo_assessed = subset(hfdo_assessed, hfdo_assessed$AsmntAggPeriod==30)
+### BPJ Per Erica's review: remove Silver Creek assessment because it is not in the main channel and the site is instead just below the WWTP outfall.
+hfdo_assessed = hfdo_assessed[!hfdo_assessed$IR_MLID%in%c("UTAHDWQ_WQX-4926792"),]
 hfdo_assessed$R3172ParameterName='High frequency DO'
 hfdo_assessed=irTools::rollUp(list(hfdo_assessed), group_vars = c("BEN_CLASS","IR_MLID","IR_MLNAME","IR_Lat","IR_Long","ASSESS_ID", "AU_NAME", "R3172ParameterName","BeneficialUse"), expand_uses=F, print=F)
 hfdo_assessed=within(hfdo_assessed, {
@@ -46,8 +54,12 @@ hfdo_assessed=within(hfdo_assessed, {
 	IR_Long=wqTools::facToNum(IR_Long)
 })
 names(hfdo_assessed)[names(hfdo_assessed)=='AssessCat']='IR_Cat'
+
+# Ecoli advisories
 ecoli_adv_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/ecoli/3_draft_ecoliadvisory_assessment_v3_ef.xlsx', 'Sheet1'))
 names(ecoli_adv_assessed)[names(ecoli_adv_assessed)=='AssessCat']='IR_Cat'
+
+# SNOWBIRD
 snowbird_assessed=as.data.frame(readxl::read_excel('P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/snowbird/snowbird_asmnt.xlsx', 'asmnt'))
 names(snowbird_assessed)[names(snowbird_assessed)=='AssessCat']='IR_Cat'
 snowbird_assessed=within(snowbird_assessed, {
@@ -55,22 +67,37 @@ snowbird_assessed=within(snowbird_assessed, {
 	IR_Long=wqTools::facToNum(IR_Long)
 })
 snowbird_assessed = snowbird_assessed[,!names(snowbird_assessed)%in%c("Mgmt_Unit")]
-bugs_assessed=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/macroinvertebrates/1_draftanalysis_macroinvert_oeassessment_AssessNotes_v4_ef.xlsx", '18-20 final assessments'))
-bugs_assessed = bugs_assessed[,c("ASSESS_ID","OriginalAssessCat","IR Note1","2016AssessCat","Category to Report")]
-names(bugs_assessed) = c("ASSESS_ID","OrigAssessCat_Bugs","EF_KF_BH_Note_Bugs","2016AssessCat_Bugs","IR_Cat")
-bugs_assessed = subset(bugs_assessed, !bugs_assessed$ASSESS_ID=="(blank)")
+snowbird_assessed$R3172ParameterName[snowbird_assessed$R3172ParameterName=="Temperature"] = "Max. Temperature"
+
+# HABS
+habs_assessed = as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/hab/3_draft_habassessment_v2_kf_eh.xlsx", "rolledUp_AU"))
+habs_assessed = subset(habs_assessed, is.na(habs_assessed$`Remove?`))
+au_bu_wmu = unique(acc_data_criteria[!is.na(acc_data_criteria$BEN_CLASS),c("ASSESS_ID","BEN_CLASS","Mgmt_Unit","AU_Type")])
+habs_assessed = merge(habs_assessed, au_bu_wmu, all.x = TRUE)
+habs_assessed$IR_MLID = paste0(habs_assessed$AU_NAME,"-HABs")
+habs_assessed$IR_MLNAME = paste0(habs_assessed$AU_NAME,"-HABs")
+habs_assessed$BeneficialUse = "2A"
+habs_assessed$BeneficialUse = ifelse(grepl("2B", habs_assessed$BEN_CLASS),"2B","2A")
+names(habs_assessed)[names(habs_assessed)=='AssessCat']='IR_Cat'
+habs_assessed = habs_assessed[,!names(habs_assessed)%in%c("Remove?","AU_NAME_OLD")]
+names(habs_assessed)[names(habs_assessed)=="ASSESS_ID_OLD"] = "ASSESS_ID2016"
+
+# Bugs
+bugs_assessed=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/macroinvertebrates/1_draftanalysis_macroinvert_oeassessment_AssessNotes_v6_ef_eh.xlsx", '18-20 final assessments'))
+bugs_assessed = bugs_assessed[,c("ASSESS_ID_OLD","ASSESS_ID","OriginalAssessCat","ResegmentNote","IR Note1","2016AssessCat","Category to Report")]
+names(bugs_assessed) = c("ASSESS_ID2016","ASSESS_ID","OrigAssessCat_Bugs","EH_AUReseg_Note","EF_KF_BH_Note_Bugs","2016AssessCat_Bugs","IR_Cat")
 bugs_assessed$R3172ParameterName = "Macroinvertebrates"
 # Get bug beneficial uses
-bugs_latlong=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/macroinvertebrates/1_draftanalysis_macroinvert_oeassessment_AssessNotes_v4_ef.xlsx", '18-20 data assessments'))
-bugs_latlong = unique(bugs_latlong[!is.na(bugs_latlong$DD_LAT_Y),c("DD_LAT_Y","DD_LONG_X")])
-au_info = wqTools::assignAUs(bugs_latlong, lat = "DD_LAT_Y", long = "DD_LONG_X")
-au_bu_info = wqTools::assignUses(au_info, lat = "DD_LAT_Y", long = "DD_LONG_X")
-au_bu_wmu_info = wqTools::assignPolys("wmu_poly", columns = c("Mgmt_Unit"), au_bu_info, lat = "DD_LAT_Y", long = "DD_LONG_X")
-au_bu_wmu_info = unique(au_bu_wmu_info[!is.na(au_bu_wmu_info$ASSESS_ID),c("ASSESS_ID","AU_NAME","Water_Type","BeneficialUse","Mgmt_Unit")])
-bugs_assessed = merge(bugs_assessed, au_bu_wmu_info, all.x = TRUE)
+bugs_latlong=as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/macroinvertebrates/1_draftanalysis_macroinvert_oeassessment_AssessNotes_v5_ef_eh.xlsx", '18-20 data assessments'))
+bugsites_latlong = unique(bugs_latlong[!is.na(bugs_latlong$DD_LAT_Y),c("DD_LAT_Y","DD_LONG_X")])
+au_info = assignAUs(bugsites_latlong, lat = "DD_LAT_Y", long = "DD_LONG_X")
+au_info = subset(au_info, !is.na(au_info$ASSESS_ID))
+au_bu_info = assignUses(au_info,lat = "DD_LAT_Y", long = "DD_LONG_X")
+names(au_bu_info)[names(au_bu_info)=="BeneficialUse"] = "BEN_CLASS"
+au_bu_info = unique(au_bu_info[,!names(au_bu_info)%in%c("DD_LAT_Y","DD_LONG_X")])
+bugs_assessed = merge(bugs_assessed, au_bu_info, all.x = TRUE)
 bugs_assessed = subset(bugs_assessed, !bugs_assessed$ASSESS_ID%in%c("undefined"))
-names(bugs_assessed)[names(bugs_assessed)=="BeneficialUse"] = "BEN_CLASS"
-names(bugs_assessed)[names(bugs_assessed)=="Water_Type"] = "AU_Type"
+bugs_assessed$BeneficialUse = NA
 bugs_assessed$BeneficialUse = gsub("1C,|2A,|2B,|4","",bugs_assessed$BEN_CLASS)
 bugs_assessed$BeneficialUse = gsub(",$","",bugs_assessed$BeneficialUse)
 bugs_assd_flat = tidyr::separate(data = bugs_assessed, col = BeneficialUse, into = c("BenUse1", "BenUse2"), sep = ",")
@@ -78,30 +105,26 @@ bugs_assd_flat = tidyr::pivot_longer(bugs_assd_flat, cols = c("BenUse1","BenUse2
 bugs_assd_flat = bugs_assd_flat[!is.na(bugs_assd_flat$BeneficialUse),!names(bugs_assd_flat)%in%c("name")]
 bugs_assd_flat$IR_MLID = paste0(bugs_assd_flat$AU_NAME,"-Bugs")
 bugs_assd_flat$IR_MLNAME = paste0(bugs_assd_flat$AU_NAME,"-Bugs")
-
-habs_assessed = as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/hab/3_draft_habassessment_v1_kf.xlsx", "rolledUp_AU"))
-au_bu_wmu = unique(acc_data_criteria[!is.na(acc_data_criteria$BEN_CLASS),c("ASSESS_ID","BEN_CLASS","Mgmt_Unit","AU_Type")])
-habs_assessed = merge(habs_assessed, au_bu_wmu, all.x = TRUE)
-habs_assessed$BEN_CLASS[habs_assessed$AU_NAME=="Upper Kents Lake"] = "2B,3A,4"
-habs_assessed$Mgmt_Unit[habs_assessed$AU_NAME=="Upper Kents Lake"] = "Cedar-Beaver"
-habs_assessed$AU_Type[habs_assessed$AU_NAME=="Upper Kents Lake"] = "Reservoir/Lake"
-habs_assessed$BEN_CLASS[habs_assessed$AU_NAME=="Dry Gulch Creek"] = "1C,2B,3E,4"
-habs_assessed$Mgmt_Unit[habs_assessed$AU_NAME=="Dry Gulch Creek"] = "Uinta Basin"
-habs_assessed$AU_Type[habs_assessed$AU_NAME=="Dry Gulch Creek"] = "River/Stream"
-habs_assessed$IR_MLID = paste0(habs_assessed$AU_NAME,"-HABs")
-habs_assessed$IR_MLNAME = paste0(habs_assessed$AU_NAME,"-HABs")
-habs_assessed$BeneficialUse = "2A"
-habs_assessed$BeneficialUse = ifelse(grepl("2B", habs_assessed$BEN_CLASS),"2B","2A")
-names(habs_assessed)[names(habs_assessed)=='AssessCat']='IR_Cat'
-
+rm(au_info, au_bu_info, bugs_latlong, bugsites_latlong)
 
 external_asmnts=plyr::rbind.fill(gsl_egg_se_assessed, fish_hg_assessed, hfdo_assessed, ecoli_adv_assessed, snowbird_assessed, bugs_assd_flat, habs_assessed)
-save(external_asmnts, file = "external_assessments_v4.RData") # latest version: Aug 2, 2020
+
+## Assign newly resegmented AU's to external assessments
+ext_assignaus = subset(external_asmnts, !is.na(external_asmnts$IR_Lat))
+ext_noassing = subset(external_asmnts, is.na(external_asmnts$IR_Lat))
+ext_assignaus = unique(ext_assignaus[,!names(ext_assignaus)%in%c("ASSESS_ID2016","AU_Type","Category to Report","2016AssessCat_Bugs","AssessCat_OLD","Mgmt_Unit")])
+names(ext_assignaus)[names(ext_assignaus)=="ASSESS_ID"] = "ASSESS_ID2016"
+names(ext_assignaus)[names(ext_assignaus)=="AU_NAME"] = "AU_NAME2016"
+ext_aus = assignAUs(data = ext_assignaus, lat = "IR_Lat", long ="IR_Long")
+
+external_asmnts = plyr::rbind.fill(ext_noassing, ext_aus)
+
+save(external_asmnts, file = "external_assessments.RData") # latest version: Sept 2, 2020, includes both rounds of AU resegmentations
 ```
 
 #### Combined assessments
 ```{r}
-load("external_assessments_v4.RData") # remember to change if any changes occur to external assessments
+load("external_assessments.RData")
 prelim_asmnts=plyr::rbind.fill(prelim_asmnts, external_asmnts)
 prelim_asmnts$pol_ind=ifelse(prelim_asmnts$ParameterGroupName=='POLLUTION INDICATORS' | prelim_asmnts$R3172ParameterName=='Lakes tier II', 'Y', 'N')
 prelim_asmnts$pol_ind[is.na(prelim_asmnts$pol_ind)]='N'
@@ -109,18 +132,19 @@ any(is.na(prelim_asmnts$IR_Cat))
 ```
 
 ### Assign review metadata
-#### WMUs
+#### WMUs and AU Types
 ```{r}
-prelim_asmnts_wmus = subset(prelim_asmnts, !is.na(prelim_asmnts$Mgmt_Unit))
-prelim_asmnts_nowmus = subset(prelim_asmnts, is.na(prelim_asmnts$Mgmt_Unit))
-prelim_asmnts_nowmus = prelim_asmnts_nowmus[,!names(prelim_asmnts_nowmus)%in%c("Mgmt_Unit","AU_Type")]
-wmus=unique(acc_data_criteria[,c('ASSESS_ID','AU_Type','Mgmt_Unit')])
-dim(prelim_asmnts)
-prelim_asmnts_nowmus=merge(prelim_asmnts_nowmus, wmus, all.x=T)
-prelim_asmnts=plyr::rbind.fill(prelim_asmnts_wmus, prelim_asmnts_nowmus)
-dim(prelim_asmnts)
-prelim_asmnts$Mgmt_Unit[prelim_asmnts$BeneficialUse=='5A']='Great Salt Lake'
+# au_wmu = readxl::read_xlsx("P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\spatial_files\\au_reseg\\site_au_reseg.xlsx", sheet = "AU WMU")## this is a local file. Change before public use.
+load("au_wmu.Rdata")
+prelim_asmnts = prelim_asmnts[,!names(prelim_asmnts)%in%c("Mgmt_Unit")]
+prelim_asmnts = merge(prelim_asmnts, au_wmu, all.x = TRUE)
 any(is.na(prelim_asmnts$Mgmt_Unit))
+na_wmu = subset(prelim_asmnts, is.na(prelim_asmnts$Mgmt_Unit))
+
+autypes = unique(data.frame(ASSESS_ID = au_poly$ASSESS_ID, AU_Type = au_poly$AU_Type))
+prelim_asmnts = prelim_asmnts[,!names(prelim_asmnts)%in%c("AU_Type")]
+prelim_asmnts = merge(prelim_asmnts,autypes, all.x = TRUE)
+
 ```
 
 #### Lakes
@@ -128,10 +152,32 @@ any(is.na(prelim_asmnts$Mgmt_Unit))
 prelim_asmnts$lake=ifelse(prelim_asmnts$AU_Type=='Reservoir/Lake' | prelim_asmnts$BeneficialUse=='5A', 'Y', 'N')
 table(prelim_asmnts$lake, exclude=NULL)
 ```
+#### BPJ Changes to Site-Level Assessments
+```{r}
+sjr_thallium = subset(prelim_asmnts, prelim_asmnts$ASSESS_ID%in%c("UT14080205-001_00","UT14080201-009_00")&prelim_asmnts$R3172ParameterName=="Thallium"&prelim_asmnts$new_listing=="Y")
+sjr_thallium$IR_Cat_BPJ = "IDEX"
+
+millrace_copper_zinc = subset(prelim_asmnts, prelim_asmnts$ASSESS_ID%in%c("UT16020201-012_00")&prelim_asmnts$R3172ParameterName%in%c("Copper", "Zinc")&prelim_asmnts$IR_Cat=="NS")
+millrace_copper_zinc$IR_Cat_BPJ = "IDEX"
+
+provoriver_do = subset(prelim_asmnts, prelim_asmnts$ASSESS_ID%in%c("UT16020203-001_00")&prelim_asmnts$R3172ParameterName%in%c("Minimum Dissolved Oxygen")&prelim_asmnts$IR_Cat=="NS")
+provoriver_do$IR_Cat_BPJ = "IDEX"
+
+prelim_asmnts = merge(prelim_asmnts, sjr_thallium, all.x = TRUE)
+prelim_asmnts = merge(prelim_asmnts, millrace_copper_zinc, all.x = TRUE)
+prelim_asmnts = merge(prelim_asmnts, provoriver_do, all.x = TRUE)
+
+names(prelim_asmnts)[names(prelim_asmnts)=="IR_Cat"] = "IR_Cat_ORIG"
+prelim_asmnts$IR_Cat = ifelse(is.na(prelim_asmnts$IR_Cat_BPJ), prelim_asmnts$IR_Cat_ORIG, prelim_asmnts$IR_Cat_BPJ)
+```
 
 #### Reviewer export file
 ```{r}
-compiled_data = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, create_workbooks = FALSE, include_rejected = FALSE)
+compiled_data = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, create_workbooks = FALSE)
+
+# If starting from prelim_asmnts.RData
+compiled_data = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_and_conventionals_assessments$toxics_assessed, conventionals_assessed = toxics_and_conventionals_assessments$conventionals_assessed, create_workbooks = TRUE, params = "Minimum Dissolved Oxygen", include_rejected = TRUE)
+
 save(compiled_data, file = "reviewer_export_data.Rdata")
 ```
 
@@ -141,11 +187,7 @@ save(compiled_data, file = "reviewer_export_data.Rdata")
 assessed_dat_crit_flat = prepped_data$acc_data
 assessed_dat_allcols = subset(acc_data, acc_data$ResultIdentifier%in%unique(assessed_dat_crit_flat$ResultIdentifier))
 
-lake_assessments = list(lake_tds_assessed=lake_tds_assessed,lake_tds_exc=lake_tds_exc,lake_profs_assessed=lake_profs_assessed)
-site_specific_tds_assessments = list(ss_mean_tds_assessed=ss_mean_tds_assessed, ss_mean_tds_exc=ss_mean_tds_exc)
-toxics_and_conventionals_assessments = list(conventionals_assessed=conventionals_assessed, conventionals_exc=conventionals_exc, toxics_assessed=toxics_assessed, toxics_exc=toxics_exc)
-
-save(acc_data_criteria, assessed_dat_crit_flat,assessed_dat_allcols,group_vars, lake_assessments, site_specific_tds_assessments, toxics_and_conventionals_assessments, prepped_data, assessed_ecoli, prelim_asmnts, compiled_data, file='prelim_asmnts_data.Rdata')
+save(acc_data_criteria, assessed_dat_crit_flat,assessed_dat_allcols,group_vars, lake_tds_assessed, lake_tds_exc, lake_profs_assessed, ss_mean_tds_assessed, ss_mean_tds_exc, conventionals_assessed, conventionals_exc, toxics_assessed, toxics_exc, prepped_data, assessed_ecoli, prelim_asmnts, compiled_data, file='prelim_asmnts_data.Rdata')
 ```
 
 ## Secondary review input files
@@ -176,7 +218,7 @@ names(ut_fac)[names(ut_fac)=="CWPFacilityTypeIndicator"]="locationType"
 names(ut_fac)[names(ut_fac)=="dec_long"]="LongitudeMeasure"
 names(ut_fac)[names(ut_fac)=="dec_lat"]="LatitudeMeasure"
 
-ut_fac=wqTools::assignAUs(ut_fac)
+ut_fac=wqTools::assignAUs(ut_fac, lat = "LatitudeMeasure", long = "LongitudeMeasure")
 ut_fac$priority=ifelse(ut_fac$locationID %in% permits$PermitID, 'Y', 'N')
 permits_aus=subset(ut_fac, locationID %in% permits$PermitID)
 

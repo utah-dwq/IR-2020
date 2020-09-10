@@ -1,44 +1,179 @@
 # Roll up assessments to various levels {#rollup-asmnts}
 
-## Add Delistings
+## Public Exports
 
 ```{r}
-
+compiled_data_4files = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_and_conventionals_assessments$toxics_assessed, conventionals_assessed = toxics_and_conventionals_assessments$conventionals_assessed, create_workbooks = TRUE, include_rejected = TRUE, rejected_data = all_rejected_records, path = "C:\\Users\\ehinman\\Desktop\\IR odds and ends\\exports")
+beepr::beep(0)
 ```
 
-## Add Spatial Information, including AU Re-segmentation
+## Remove Lakes and Reservoirs
 ```{r}
-spatial = read.csv("P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\spatial_files\\au_geometry.csv")
-
-site_au_reseg = readxl::read_xlsx("P:\\WQ\\Integrated Report\\IR_2020\\2020-IR-assessments\\spatial_files\\au_reseg\\site_au_reseg.xlsx", sheet = "Resgement sites")
-
-mlid_au_res = unique(site_au_reseg[,c("IR_MLID","AUID2016","RESEG2020")])
-mlid_au_res$ASSESS_ID = mlid_au_res$AUID2016
-
-prelim_asmnts_res = merge(mlid_au_res, prelim_asmnts, all.x = TRUE)
-prelim_asmnts_nores = subset(prelim_asmnts, !prelim_asmnts$ASSESS_ID%in%unique(mlid_au_res$ASSESS_ID))
-
-dim(prelim_asmnts_res)[1]+dim(prelim_asmnts_nores)[1]==dim(prelim_asmnts)[1]
+asmts_sr = subset(prelim_asmnts, !prelim_asmnts$AU_Type%in%c("Reservoir/Lake"))
 ```
-
 
 ## Remove Pollution Indicators
 Pollution indicators must be removed from roll up to ensure assessment units are assessed appropriately
 
 ```{r}
-pi_recs = subset(prelim_asmnts, prelim_asmnts$ParameterGroupName=="POLLUTION INDICATORS")
+pi_recs = subset(asmts_sr, asmts_sr$ParameterGroupName=="POLLUTION INDICATORS")
 pi_recs$pi = 1
-asmnts_no_pi = merge(prelim_asmnts, pi_recs, all.x=TRUE)
+asmnts_no_pi = merge(asmts_sr, pi_recs, all.x=TRUE)
 asmnts_no_pi = subset(asmnts_no_pi, is.na(asmnts_no_pi$pi))
-au_bu = unique(asmnts_no_pi[,c("BEN_CLASS","ASSESS_ID")])
-au_bu = au_bu[!is.na(au_bu$BEN_CLASS),]
-asmnts_no_pi = asmnts_no_pi[,!names(asmnts_no_pi)%in%c("BEN_CLASS")]
-asmnts_no_pi = merge(asmnts_no_pi, au_bu, all.x = TRUE)
-asmnts_no_pi = within(asmnts_no_pi,{
-  AU_Type[AU_Type=="Lake / Reservoir"] = "Reservoir/Lake"
-  AU_Type[AU_Type=="River / Stream"] = "River/Stream"
+asmnts_no_pi = asmnts_no_pi[,!names(asmnts_no_pi)%in%c("pi")]
+rm(pi_recs)
+```
+
+## Generate 303d and 305b lists
+
+```{r, eval = F, echo = F}
+# AU Resegmentation data
+# au_reseg = readxl::read_xlsx("C:\\Users\\ehinman\\Downloads\\site_au_reseg (2).xlsx", sheet = "Resegment AUs")
+# names(au_reseg)[names(au_reseg)=="AUID2016"] = "ASSESS_ID2016"
+# names(au_reseg)[names(au_reseg)=="AUNAME2016"] = "AU_NAME2016"
+# save(au_reseg, file = "au_resegmentation.RData")
+```
+
+```{r, eval = F, echo = F}
+# 2016 IR Categories for 305b and 303d to carry forward previous info
+# tofb = readxl::read_xlsx("C:\\Users\\ehinman\\Documents\\GitHub\\IR-2020\\cyc_last_assessed_first_listed.xlsx", sheet = "website_2016_305b")
+# tofb = merge(tofb, au_reseg[,c("ASSESS_ID","ASSESS_ID2016")], all.x=TRUE)
+# tofb$ASSESS_ID = ifelse(is.na(tofb$ASSESS_ID),tofb$ASSESS_ID2016, tofb$ASSESS_ID)
+# names(tofb)[names(tofb)=="FINAL_AU_EPACat"] = "AU_EPACat"
+# 
+# totd = readxl::read_xlsx("C:\\Users\\ehinman\\Documents\\GitHub\\IR-2020\\cyc_last_assessed_first_listed.xlsx", sheet = "website_2016_303d")
+# 
+# totd1 = totd%>%separate(Parameter_Cat5NDUses,c("use1","use2","use3","use4"),sep="; ")%>%pivot_longer(cols = c(use1,use2,use3,use4), names_to = "use",values_to = "BeneficialUse",values_drop_na=TRUE)
+# 
+# totd1$BeneficialUse = gsub("HH","",totd1$BeneficialUse)
+# 
+# conv = data.frame(Param_frac_AbbrevName=unique(totd1$Param_frac_AbbrevName), R3172ParameterName = c("E. coli","Max. Temperature","pH","Total Dissolved Solids","Macroinvertebrates","Minimum Dissolved Oxygen","Sedimentation","Aluminum","Selenium","Radium 226, 228 (Combined)","Cadmium","Iron","Lead","Copper","Mercury","Boron","Total Ammonia as N","Zinc","Arsenic","Total Phosphorus as P","Nitrate as N"))
+# 
+# totd1 = merge(totd1, conv, all.x = TRUE)
+# totd1 = merge(totd1, au_reseg, all.x = TRUE)
+# totd1$ASSESS_ID = ifelse(is.na(totd1$ASSESS_ID),totd1$ASSESS_ID2016,totd1$ASSESS_ID)
+# 
+# totd = totd1[,!names(totd1)%in%c("AU_Type","AU_NAME","AU_NAME2016","AU_DESCRIP","use","Param_frac_AbbrevName","EPAs Approved TMDL ID","IRReport","EPA Cause ID","AU_DWQCat","Parameter_DWQCat","RESEG2020")]
+# 
+# save(totd,tofb, file = "2016_305b_303d.RData")
+
+```
+
+### 303d
+
+```{r}
+load("2016_305b_303d.Rdata")
+
+# 303d
+ns_param_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse", "R3172ParameterName"), cat_var="IR_Cat", expand_uses=F, print=F)
+ns_param_asmnts$ASSESS_ID = as.character(ns_param_asmnts$ASSESS_ID)
+names(ns_param_asmnts)[names(ns_param_asmnts)=="AssessCat"]="param_DWQasmnt"
+ns_param_asmnts = subset(ns_param_asmnts, ns_param_asmnts$param_DWQasmnt=="NS")
+ns_param_asmnts$Parameter_EPACat_2020 = 5
+# ns_param_asmnts = merge(ns_param_asmnts, au_reseg, all.x = TRUE)
+# ns_param_asmnts$ASSESS_ID2016=ifelse(is.na(ns_param_asmnts$ASSESS_ID2016),ns_param_asmnts$ASSESS_ID,ns_param_asmnts$ASSESS_ID2016)
+# ns_param_asmnts = ns_param_asmnts[,!names(ns_param_asmnts)%in%c("AU_NAME2016","ASSESS_ID2016","AU_Type","AU_DESCRIP","RESEG2020")]
+
+totd = totd[,!names(totd)%in%c("AU_EPACat","ASSESS_ID2016","IRCycleAULastAssessed")]
+
+ns_param_asmnts_rolling = merge(ns_param_asmnts, totd, all = TRUE)
+
+```
+
+### 305b
+For the 305b list, we need to discern between Fully Supporting and No Evidence of Impairment. We have programmed this functionality into our roll up function in the irTools package, but it requires some additional steps. In this section, we pulled all Fully Supporting AU's from the AU roll up, and then re-rolled up data from those AU's using the "expand uses" input in the R function. If a use contains an "NA" in the AssessCat category, this means that the AU has No Evidence of Impairment, but we did not assess all of its beneficial uses. These AU's are then re-connected to the rest of the assessments.
+
+```{r}
+# 305b
+# Roll up to overall AU to find FS AU's
+au_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME"), cat_var="IR_Cat", expand_uses=F, print=F)
+
+fs_aus = subset(au_asmnts$ASSESS_ID, au_asmnts$AssessCat=="FS")
+fs_prelim = subset(asmnts_no_pi, asmnts_no_pi$ASSESS_ID%in%fs_aus)
+
+# Expand uses for FS cats to find cat 2's
+fs_au_asmnts = irTools::rollUp(list(fs_prelim), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse"), cat_var="IR_Cat", expand_uses=T, print=F)
+
+# Au's with NA's
+nei_aus = subset(fs_au_asmnts, fs_au_asmnts$AssessCat=="NA"|fs_au_asmnts$AssessCat=="IDNE")
+nei_auids = unique(nei_aus$ASSESS_ID)
+
+au_use_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse"), cat_var="IR_Cat", expand_uses=T, print=F)
+
+# Combine overall cat and use cats
+names(au_asmnts)[names(au_asmnts)=="AssessCat"] <- "DWQ_AU_Cat"
+names(au_use_asmnts)[names(au_use_asmnts)=="AssessCat"] <- "DWQ_AU_Use_Cat"
+au_use_cats = merge(au_use_asmnts, au_asmnts, all = TRUE)
+
+# length(au_use_cats$DWQ_AU_Use_Cat[is.na(au_use_cats$DWQ_AU_Use_Cat)])
+# length(au_use_cats$DWQ_AU_Cat[is.na(au_use_cats$DWQ_AU_Cat)])
+
+# Add DWQ numeric category
+au_use_cats = within(au_use_cats,{
+  DWQ_AU_NumCat = NA
+  DWQ_AU_NumCat[DWQ_AU_Cat=="NS"] = 5
+  DWQ_AU_NumCat[DWQ_AU_Cat=="IDEX"|DWQ_AU_Cat=="IDNE"] = 3
+  DWQ_AU_NumCat[DWQ_AU_Cat=="FS"] = 1
 })
-rm(pi_recs, au_bu)
+
+au_use_cats$DWQ_AU_NumCat = ifelse(au_use_cats$ASSESS_ID%in%nei_auids, "2", au_use_cats$DWQ_AU_NumCat)
+
+rm(fs_aus, fs_prelim, fs_au_asmnts, nei_auids, nei_aus)
+
+au_cats = unique(au_use_cats[,c("ASSESS_ID","DWQ_AU_Cat","DWQ_AU_NumCat")])
+names(au_cats) = c("ASSESS_ID","AU_DWQCat_2020","AU_EPACat_2020")
+
+au_cats_rolling = merge(au_cats, tofb, all = TRUE)
+au_cats_rolling$ASSESS_ID = as.character(au_cats_rolling$ASSESS_ID)
+```
+
+### Combine AU cat and AU param cats, new and historic, for exercise/check
+```{r, eval = FALSE}
+library(tidyverse)
+au_param_cats_rolling = merge(au_cats_rolling, ns_param_asmnts_rolling, all.x = TRUE)
+au_param_cats_rolling$IRCycleAULastAssessed = ifelse(is.na(au_param_cats_rolling$AU_DWQCat_2020),au_param_cats_rolling$IRCycleAULastAssessed,"2020")
+
+maxdat = prepped_data$acc_data
+maxdat$ActivityStartDate = as.Date(as.character(maxdat$ActivityStartDate),"%Y-%m-%d")
+max_date = maxdat%>%group_by(ASSESS_ID)%>%summarise(MaxDate = max(ActivityStartDate))
+max_date$New_Data = ifelse(max_date$MaxDate>as.Date("2014-10-01"),"Y","N")
+
+au_param_cats_rolling = merge(au_param_cats_rolling, max_date, all.x = TRUE)
+write.csv(au_param_cats_rolling, "au_param_categories_historic_cats.csv", row.names = FALSE)
+```
+
+
+## Add Delistings
+
+```{r}
+# delistings = readxl::read_xlsx("C:\\Users\\ehinman\\Downloads\\z_delisting_template_forEH.xlsx", sheet = "Draft 2018 2020 IR delistings")
+# names(delistings)[names(delistings)=="ASSESS_ID"] = "ASSESS_ID2016"
+# save(delistings, file = "delistings.RData")
+load("delistings.RData")
+
+delistings = merge(delistings, au_reseg, all.x = TRUE)
+delistings = subset(delistings, is.na(delistings$`EF Note`))
+delistings$ASSESS_ID = ifelse(is.na(delistings$ASSESS_ID),delistings$ASSESS_ID2016,delistings$ASSESS_ID)
+
+
+delistings = delistings[,c("ASSESS_ID","R3172ParameterName","desliting_notes")]
+names(delistings)[names(delistings)=="desliting_notes"] = "delisting_notes"
+
+# au_parm_cats_D = merge(au_param_cats_rolling, delistings, all = TRUE)
+# write.csv(au_parm_cats_D, "au_param_cats_delistings.csv")
+```
+
+## Add HH Criteria
+```{r}
+
+#### Add HHC to 303d
+hhc_ns = subset(prelim_asmnts, prelim_asmnts$TableDescription=="LIST OF HUMAN HEALTH CRITERIA (CONSUMPTION)"&prelim_asmnts$IR_Cat=="NS")
+hhc_ns = unique(hhc_ns[,c("ASSESS_ID","AU_NAME","BeneficialUse","Mgmt_Unit","R3172ParameterName")])
+hhc_ns$BeneficialUse = paste0("HH",hhc_ns$BeneficialUse)
+hhc_ns$AssessCat = "NS"
+
+# Flattened by use and parameter
+ns_param_asmnts = plyr::rbind.fill(ns_param_asmnts, hhc_ns)
 ```
 
 
@@ -79,47 +214,6 @@ write.csv(file="site_au_use_param_asmnts_merged.csv", au_use_site_param_asmts, r
 # Pollution Indicator Assessments
 pi_asmnts = subset(prelim_asmnts, prelim_asmnts$ParameterGroupName=="POLLUTION INDICATORS")
 pi_au_param_asmnts = irTools::rollUp(list(pi_asmnts), group_vars = c("ASSESS_ID","AU_NAME","R3172ParameterName"), cat_var = "AssessCat", expand_uses = F, print = F)
-```
-
-## Generate 305b and 303d lists
-
-### 305b
-For the 305b list, we need to discern between Fully Supporting and No Evidence of Impairment. We have programmed this functionality into our roll up function in the irTools package, but it requires some additional steps. In this section, we pulled all Fully Supporting AU's from the AU roll up, and then re-rolled up data from those AU's using the "expand uses" input in the R function. If a use contains an "NA" in the AssessCat category, this means that the AU has No Evidence of Impairment, but we did not assess all of its beneficial uses. These AU's are then re-connected to the rest of the assessments.
-```{r, 305b}
-# Roll up to overall AU to find FS AU's
-au_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BEN_CLASS","AU_Type","Mgmt_Unit"), cat_var="IR_Cat", expand_uses=F, print=F)
-
-fs_aus = subset(au_asmnts$ASSESS_ID, au_asmnts$AssessCat=="FS")
-fs_prelim = subset(asmnts_no_pi, asmnts_no_pi$ASSESS_ID%in%fs_aus)
-
-# Expand uses for FS cats to find cat 2's
-fs_au_asmnts = irTools::rollUp(list(fs_prelim), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse"), cat_var="IR_Cat", expand_uses=T, print=F)
-
-# Au's with NA's
-nei_aus = subset(fs_au_asmnts, fs_au_asmnts$AssessCat=="NA"|fs_au_asmnts$AssessCat=="IDNE")
-nei_auids = unique(nei_aus$ASSESS_ID)
-
-au_use_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse"), cat_var="IR_Cat", expand_uses=T, print=F)
-
-# Combine overall cat and use cats
-names(au_asmnts)[names(au_asmnts)=="AssessCat"] <- "DWQ_AU_Cat"
-names(au_use_asmnts)[names(au_use_asmnts)=="AssessCat"] <- "DWQ_AU_Use_Cat"
-au_use_cats = merge(au_use_asmnts, au_asmnts, all = TRUE)
-
-# length(au_use_cats$DWQ_AU_Use_Cat[is.na(au_use_cats$DWQ_AU_Use_Cat)])
-# length(au_use_cats$DWQ_AU_Cat[is.na(au_use_cats$DWQ_AU_Cat)])
-
-# Add DWQ numeric category
-au_use_cats = within(au_use_cats,{
-  DWQ_AU_NumCat = NA
-  DWQ_AU_NumCat[DWQ_AU_Cat=="NS"] = 5
-  DWQ_AU_NumCat[DWQ_AU_Cat=="IDEX"|DWQ_AU_Cat=="IDNE"] = 3
-  DWQ_AU_NumCat[DWQ_AU_Cat=="FS"] = 1
-})
-
-au_use_cats$DWQ_AU_NumCat = ifelse(au_use_cats$ASSESS_ID%in%nei_auids, "2", au_use_cats$DWQ_AU_NumCat)
-
-rm(fs_aus, fs_prelim, fs_au_asmnts, nei_auids, nei_aus)
 ```
 
 #### Add 2016 IR Cycle Last Assessed
@@ -164,22 +258,6 @@ b305_aulevel = unique(b305[,!names(b305)%in%c("BeneficialUse","DWQ_AU_Use_Cat")]
 
 ```
 
-### 303(d) List
-```{r}
-ns_param_asmnts = irTools::rollUp(list(asmnts_no_pi), group_vars=c("ASSESS_ID","AU_NAME","BeneficialUse", "Mgmt_Unit","R3172ParameterName"), cat_var="IR_Cat", expand_uses=F, print=F)
-au_mgmt = unique(ns_param_asmnts[,c("ASSESS_ID","Mgmt_Unit")])
-
-ns_param_asmnts = subset(ns_param_asmnts, ns_param_asmnts$AssessCat=="NS")
-
-#### Add HHC to 303d
-hhc_ns = subset(prelim_asmnts, prelim_asmnts$TableDescription=="LIST OF HUMAN HEALTH CRITERIA (CONSUMPTION)"&prelim_asmnts$IR_Cat=="NS")
-hhc_ns = unique(hhc_ns[,c("ASSESS_ID","AU_NAME","BeneficialUse","Mgmt_Unit","R3172ParameterName")])
-hhc_ns$BeneficialUse = paste0("HH",hhc_ns$BeneficialUse)
-hhc_ns$AssessCat = "NS"
-
-# Flattened by use and parameter
-ns_param_asmnts = plyr::rbind.fill(ns_param_asmnts, hhc_ns)
-```
 
 #### Add Cycle First Listed 
 ```{r}

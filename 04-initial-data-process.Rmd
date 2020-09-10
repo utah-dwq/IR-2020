@@ -76,7 +76,36 @@ save(all_record_rejections, file = "secondary_review_record_rejections.RData")
 rm(awqms_rejections, blmmoab_rejections, crazytempphdo_rejections, flowrev_rejections, labactcomment_rejections, secondaryrev_rejections)
 ```
 
+#### Incorporate AU Resegmentation into the master site tab of the translation workbook
+This R code chunk documents the process taken to update the master site file list in the translation workbook following AU resegmentation finalization. It does not need to be run unless changes are made to AU's, and the sites need to be re-assigned.
+```{r, eval = F}
+sites = readxl::read_xlsx("C:\\Users\\ehinman\\Documents\\GitHub\\IR-2020\\ir_translation_workbook_working_v13_eh - no IR_Fraction formula.xlsx", sheet = "masterSiteTable")
+names(sites)[names(sites)=="ASSESS_ID"] = "ASSESS_ID2016"
+names(sites)[names(sites)=="AU_NAME"] = "AU_NAME2016"
+names(sites)[names(sites)=="AU_Type"] = "AU_Type2016"
 
+sites_acc = subset(sites, sites$IR_FLAG=="ACCEPT") #&!sites$AU_NAME2016%in%c("Lake Powell"))
+sites_rej = subset(sites, sites$IR_FLAG=="REJECT") #&!sites$AU_NAME2016%in%c("Lake Powell"))
+sites_accnew = wqTools::assignAUs(data = sites_acc, lat = "IR_Lat", long = "IR_Long")
+sites_rejnew = wqTools::assignAUs(data = sites_rej, lat = "LatitudeMeasure", long = "LongitudeMeasure")
+
+sites_all = plyr::rbind.fill(sites_accnew, sites_rejnew)
+sites_all$ASSESS_ID = ifelse(is.na(sites_all$ASSESS_ID),sites_all$ASSESS_ID2016, sites_all$ASSESS_ID)
+sites_all$AU_NAME = ifelse(is.na(sites_all$AU_NAME),sites_all$AU_NAME2016, sites_all$AU_NAME)
+sites_all$AU_Type = ifelse(is.na(sites_all$AU_Type),sites_all$AU_Type2016, sites_all$AU_Type)
+sites_all$different = ifelse(sites_all$ASSESS_ID==sites_all$ASSESS_ID2016, 0, 1)
+write.csv(sites_all, "new_master_site_file_aureseg.csv", row.names = FALSE) # copied and pasted into master site sheet in translation workbook.
+
+### Check
+# acc_sites_reseg = subset(sites_all, sites_all$IR_FLAG=="ACCEPT"&sites_all$different==1)
+# au_reseg = readxl::read_xlsx("C:\\Users\\ehinman\\Downloads\\site_au_reseg (2).xlsx", sheet ="Resgement sites")
+# au_reseg = au_reseg[,!names(au_reseg)%in%c("IR_Lat","IR_Long")]
+# 
+# merged_check = merge(acc_sites_reseg, au_reseg, all = TRUE)
+# write.csv(merged_check, "au_reseg_site_check.csv", row.names = FALSE)
+```
+
+### Load data objects for processing
 ```{r, load-rdata}
 load("irdata_wqp_raw.Rdata")
 load("secondary_review_record_rejections.RData")
@@ -108,7 +137,7 @@ rm(all_record_rejections)
 3. Lab/activity
 
 ```{r, apply-screens}
-translation_wb='ir_translation_workbook_working_v13_eh - no IR_Fraction formula.xlsx'
+translation_wb='ir_translation_workbook_working_v15_eh_resegmented - no IR_Fraction formula.xlsx'
 merged_results_flagged=merged_results %>%
 	applyScreenTable(wb=translation_wb, sheetname="masterSiteTable", startRow=1, flag_col_name="IR_Site_FLAG", com_col_name="IR_Site_COMMENT")
 rej_data=subset(merged_results_flagged, IR_Site_FLAG=='REJECT')
@@ -142,7 +171,6 @@ acc_data=fillMaskedValues(results=acc_data, detquantlim=irdata$detquantlim, tran
 									   detLimitTypeTable_sheetname="detLimitTypeTable", detLimitTypeTable_startRow=3,
 									   unitConvTable_sheetname="unitConvTable", unitConvTable_startRow=1, unitConvTable_startCol=1,
 									   lql_fac=0.5, uql_fac=1)
-
 ```
 
 ### Back-fill units for data where unit was NA in data, but existed in detquantlim - add records w/o units in either to rejection dataframe
@@ -166,6 +194,7 @@ rm(unit_rej_data)
 ```{r, param-trans}
 acc_data=applyScreenTable(acc_data, wb=translation_wb, sheetname="paramTransTable", startRow=4, flag_col_name="IR_Parameter_FLAG", com_col_name="IR_Parameter_COMMENT")
 table(acc_data$IR_Parameter_FLAG, exclude=NULL)
+
 ```
 
 ### Rejecting data via parameter table, rbind rejected data to rej_data object
@@ -192,6 +221,7 @@ In the secondary review process, we found an uploading issue with SLCo data subm
 
 ```{r, remove-slco-asmts}
 load("au_parameter_rejections_slco.RData")
+names(au_param_rej)[names(au_param_rej)=="ASSESS_ID"] = "ASSESS_ID2016"
 au_param_rej$SLCo_flag = "REJECT"
 au_param_rej$SLCo_comment = au_param_rej$Comment
 au_param_rej = au_param_rej[,!names(au_param_rej)%in%c("Reviewer","Comment","ReviewDate")]
@@ -209,7 +239,7 @@ screened_data=rej_data
 
 ```{r, echo=F}
 # COUNT CHECK
-if(!(dim(rej_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1])){
+if(!(dim(screened_data)[1]+dim(acc_data)[1]==dim(merged_results_flagged)[1])){
   warning("Rejected and accepted records do not match total record count before applying screen tables.")
 }
 rm(rej_data)
@@ -252,7 +282,6 @@ length(unique(acc_data_criteria$ResultIdentifier)) #592766
 length(unique(c(prepped_data$rej_data_reasons$ResultIdentifier, prepped_data$acc_data$ResultIdentifier))) #466437
 
 ```
-
 
 ### Aggregate all rejected records from screening and data prep process
 
