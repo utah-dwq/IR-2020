@@ -154,7 +154,7 @@ table(prelim_asmnts$lake, exclude=NULL)
 ```
 #### BPJ Changes to Site-Level Assessments
 ```{r}
-sjr_thallium = subset(prelim_asmnts, prelim_asmnts$ASSESS_ID%in%c("UT14080205-001_00","UT14080201-009_00")&prelim_asmnts$R3172ParameterName=="Thallium"&prelim_asmnts$new_listing=="Y")
+sjr_thallium = subset(prelim_asmnts, prelim_asmnts$ASSESS_ID%in%c("UT14080205-001_00","UT14080201-009_00")&prelim_asmnts$R3172ParameterName=="Thallium")
 sjr_thallium$IR_Cat_BPJ = "IDEX"
 
 millrace_copper_zinc = subset(prelim_asmnts, prelim_asmnts$ASSESS_ID%in%c("UT16020201-012_00")&prelim_asmnts$R3172ParameterName%in%c("Copper", "Zinc")&prelim_asmnts$IR_Cat=="NS")
@@ -163,9 +163,9 @@ millrace_copper_zinc$IR_Cat_BPJ = "IDEX"
 provoriver_do = subset(prelim_asmnts, prelim_asmnts$ASSESS_ID%in%c("UT16020203-001_00")&prelim_asmnts$R3172ParameterName%in%c("Minimum Dissolved Oxygen")&prelim_asmnts$IR_Cat=="NS")
 provoriver_do$IR_Cat_BPJ = "IDEX"
 
-prelim_asmnts = merge(prelim_asmnts, sjr_thallium, all.x = TRUE)
-prelim_asmnts = merge(prelim_asmnts, millrace_copper_zinc, all.x = TRUE)
-prelim_asmnts = merge(prelim_asmnts, provoriver_do, all.x = TRUE)
+cat3s = plyr::rbind.fill(sjr_thallium, millrace_copper_zinc, provoriver_do)
+
+prelim_asmnts = merge(prelim_asmnts, cat3s, all.x = TRUE)
 
 names(prelim_asmnts)[names(prelim_asmnts)=="IR_Cat"] = "IR_Cat_ORIG"
 prelim_asmnts$IR_Cat = ifelse(is.na(prelim_asmnts$IR_Cat_BPJ), prelim_asmnts$IR_Cat_ORIG, prelim_asmnts$IR_Cat_BPJ)
@@ -176,7 +176,7 @@ prelim_asmnts$IR_Cat = ifelse(is.na(prelim_asmnts$IR_Cat_BPJ), prelim_asmnts$IR_
 compiled_data = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_assessed, conventionals_assessed = conventionals_assessed, create_workbooks = FALSE)
 
 # If starting from prelim_asmnts.RData
-compiled_data = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_and_conventionals_assessments$toxics_assessed, conventionals_assessed = toxics_and_conventionals_assessments$conventionals_assessed, create_workbooks = TRUE, params = "Minimum Dissolved Oxygen", include_rejected = TRUE)
+# compiled_data = irTools::composeExport(prepped_data = prepped_data, toxics_assessed = toxics_and_conventionals_assessments$toxics_assessed, conventionals_assessed = toxics_and_conventionals_assessments$conventionals_assessed, create_workbooks = TRUE, params = "Minimum Dissolved Oxygen", include_rejected = TRUE)
 
 save(compiled_data, file = "reviewer_export_data.Rdata")
 ```
