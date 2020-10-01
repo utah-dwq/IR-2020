@@ -256,10 +256,16 @@ au_asmnts_rolling$IRCycleAULastAssessed = ifelse(!is.na(au_asmnts_rolling$AU_DWQ
 au_asmnts_rolling$AU_EPACat_2020 = ifelse(is.na(au_asmnts_rolling$AU_EPACat_2020),au_asmnts_rolling$AU_EPACat,au_asmnts_rolling$AU_EPACat_2020)
 
 # Add AU and WMU info
+
+au_rivers = subset(au_geom, au_geom$AU_Type=="River/Stream")
+wmu_rivers = subset(au_wmu, au_wmu$ASSESS_ID%in%au_rivers$ASSESS_ID)
+au_desc_rivers = subset(au_auid_audesc, au_auid_audesc$ASSESS_ID%in%au_rivers$ASSESS_ID)
+river_metadata = merge(au_rivers, wmu_rivers, all = TRUE)
+river_metadata = river_metadata[,c("ASSESS_ID","AU_NAME","AU_DESCRIP","au_stream_len_miles","Mgmt_Unit")]
+
+
 au_asmnts_rolling = au_asmnts_rolling[,!names(au_asmnts_rolling)%in%c("AU_NAME")]
-au_asmnts_rolling = merge(au_asmnts_rolling, au_auid_audesc, all.x = TRUE)
-au_asmnts_rolling = merge(au_asmnts_rolling, au_wmu, all.x = TRUE)
-au_asmnts_rolling = merge(au_asmnts_rolling, au_geom[,c("ASSESS_ID","au_stream_len_miles")], all.x = TRUE)
+au_asmnts_rolling = merge(au_asmnts_rolling, river_metadata, all.x = TRUE)
 
 # Add impaired TMDL listings
 tmdl_aus = unique(ns_4awide$ASSESS_ID)
@@ -272,7 +278,9 @@ au_asmnts_rolling$AU_EPACat_2020 = ifelse(au_asmnts_rolling$ASSESS_ID%in%cat5_au
 # Change not-assessed cat 5s on delisting list to cat 3 because we have no assessments this cycle
 ns_na_aus = subset(au_asmnts_rolling, au_asmnts_rolling$AU_EPACat_2020==5&is.na(au_asmnts_rolling$AU_DWQasmnt))
 ns_na_aus_del = merge(ns_na_aus, delist_abbrev, all.x = TRUE)
-ns_na_aus_del = subset(ns_na_aus_del, !is.na(ns_na_aus_del$R3172ParameterName)&!(ns_na_aus_del$ASSESS_ID=="UT14060009-004_02")) 
+
+# remove one AU with two other impaired params and another that was part of an AU split and actually TOOK the impairment away from the other AU. (Centerville and Parrish Creek AUs)
+ns_na_aus_del = subset(ns_na_aus_del, !is.na(ns_na_aus_del$R3172ParameterName)&!(ns_na_aus_del$ASSESS_ID=="UT14060009-004_02")&!(ns_na_aus_del$ASSESS_ID=="UT16020102-044_02")) 
 ns_na_aus1 = as.character(unique(ns_na_aus_del$ASSESS_ID))
 
 au_asmnts_rolling$AU_EPACat_2020 = ifelse(au_asmnts_rolling$ASSESS_ID%in%ns_na_aus1, "3",au_asmnts_rolling$AU_EPACat_2020)
@@ -292,7 +300,7 @@ writexl::write_xlsx(list(
 										`tmdls`=tmdls,
 										`delistings`=delistings,
 										`4A only`=ns_4awide
-	), path=paste0('rivers_and_streams_file_v4.xlsx'), format_headers=F, col_names=T)
+	), path=paste0('rivers_and_streams_file_v7.xlsx'), format_headers=F, col_names=T)
 
 # ns_305b = as.character(au_asmnts_rolling_1$ASSESS_ID[au_asmnts_rolling_1$AU_EPACat_2020==5])
 # ns_303d1 = as.character(unique(ns_303d$ASSESS_ID))
@@ -307,6 +315,7 @@ writexl::write_xlsx(list(
 
 ## Summary Stats
 ```{r}
+data_used = list(au_asmnts_rolling_1 = au_asmnts_rolling_1, ns_303dwide = ns_303dwide, ns_4awide = ns_4awide)
 ## Total AUs
 # totaus = subset(au_asmnts_rolling_1, !is.na(au_asmnts_rolling_1$AU_DWQasmnt))
 # total_river_aus = length(unique(totaus$ASSESS_ID))
@@ -336,7 +345,7 @@ totd_fa_4c = merge(totd_fa_4c, trans, all.x = TRUE)
 
 ns_param_group_breakdowns = totd_fa_4c%>%group_by(ParameterGroup)%>%summarise(Impairment_Count = length(ASSESS_ID))
 
-save(data_used, total_river_aus, total_river_miles, total_monitoring_locations, cats_by_aucount, cats_by_streammiles, ns_param_group_breakdowns, file = "execsum_stats_rivers_streams.RData")
+save(data_used, total_river_aus, total_river_miles, total_monitoring_locations, cats_by_aucount, cats_by_streammiles, ns_param_group_breakdowns, file = "execsum_stats_rivers_streams_v2.RData")
 ```
 
 
