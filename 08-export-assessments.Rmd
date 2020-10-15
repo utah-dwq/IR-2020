@@ -70,7 +70,7 @@ snowbird_assessed = snowbird_assessed[,!names(snowbird_assessed)%in%c("Mgmt_Unit
 snowbird_assessed$R3172ParameterName[snowbird_assessed$R3172ParameterName=="Temperature"] = "Max. Temperature"
 
 # HABS
-habs_assessed = as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/hab/3_draft_habassessment_v2_kf_eh.xlsx", "rolledUp_AU"))
+habs_assessed = as.data.frame(readxl::read_excel("P:/WQ/Integrated Report/IR_2020/2020-IR-assessments/assessment/99_external_assessments/hab/3_draft_habassessment_v3_kf_eh.xlsx", "rolledUp_AU"))
 habs_assessed = subset(habs_assessed, is.na(habs_assessed$`Remove?`))
 au_bu_wmu = unique(acc_data_criteria[!is.na(acc_data_criteria$BEN_CLASS),c("ASSESS_ID","BEN_CLASS","Mgmt_Unit","AU_Type")])
 habs_assessed = merge(habs_assessed, au_bu_wmu, all.x = TRUE)
@@ -119,7 +119,7 @@ ext_aus = assignAUs(data = ext_assignaus, lat = "IR_Lat", long ="IR_Long")
 
 external_asmnts = plyr::rbind.fill(ext_noassing, ext_aus)
 
-save(external_asmnts, file = "external_assessments.RData") # latest version: Sept 2, 2020, includes both rounds of AU resegmentations
+save(external_asmnts, file = "external_assessments.RData") # latest version: Oct 9, 2020, includes both rounds of AU resegmentations and HAB edits
 ```
 
 #### Combined assessments
